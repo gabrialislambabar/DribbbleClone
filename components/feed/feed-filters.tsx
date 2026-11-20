@@ -15,11 +15,7 @@ export function FeedFilters({ params, categories }: FeedFiltersProps) {
   const showDays = params.sort !== "newest";
 
   return (
-    <form
-      method="get"
-      action="/"
-      className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-white p-4"
-    >
+    <form method="get" action="/" className="flex flex-wrap items-end gap-3">
       <input type="hidden" name="sort" value={params.sort} />
 
       <label className="flex min-w-40 flex-col gap-1 text-xs font-medium text-muted">
