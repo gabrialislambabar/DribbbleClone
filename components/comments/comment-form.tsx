@@ -6,6 +6,7 @@ import { useActionState, useRef, useState } from "react";
 import { addComment, type CommentActionState } from "@/app/social/actions";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { COMMENT_BODY_MAX } from "@/lib/comments/constants";
 
 type CommentFormProps = {
   shotId: string;
@@ -46,14 +47,16 @@ export function CommentForm({ shotId, signedIn, signInHref }: CommentFormProps) 
       <Textarea
         name="body"
         rows={3}
-        maxLength={1000}
+        maxLength={COMMENT_BODY_MAX}
         required
         placeholder="Add a comment…"
         onChange={(event) => setLength(event.target.value.length)}
       />
 
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted">{length}/1000</span>
+        <span className="text-xs text-muted">
+          {length}/{COMMENT_BODY_MAX}
+        </span>
         <Button type="submit" size="sm" disabled={pending}>
           {pending ? "Posting…" : "Post comment"}
         </Button>

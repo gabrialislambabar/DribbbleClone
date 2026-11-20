@@ -3,9 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CommentSection } from "@/components/comments/comment-section";
+import { ReportButton } from "@/components/moderation/report-button";
 import { FollowButton } from "@/components/profile/follow-button";
-import { LikeButton } from "@/components/shots/like-button";
+import { ShotRealtime } from "@/components/realtime/shot-realtime";
 import { ShotActions } from "@/components/shots/shot-actions";
 import { ShotStatusBadge } from "@/components/shots/shot-status-badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -101,115 +101,123 @@ export default async function ShotPage({ params, searchParams }: ShotPageProps) 
             fill
             priority
             sizes="(max-width: 1024px) 100vw, 1024px"
+            unoptimized={Boolean(shot.cover_credit)}
             className="object-cover"
           />
         ) : null}
       </div>
 
-      {published ? (
-        <div className="mt-4 flex items-center gap-4">
-          <LikeButton
-            shotId={shot.id}
-            liked={liked}
-            count={shot.like_count}
-            interactive={Boolean(user)}
-          />
-          <Link
-            href="#comments"
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted hover:bg-surface hover:text-foreground"
+      {shot.cover_credit ? (
+        <p className="mt-2 text-xs text-muted">
+          Photo by{" "}
+          <a
+            href={shot.cover_credit.url}
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-foreground"
           >
-            {shot.comment_count} comments
-          </Link>
-        </div>
+            {shot.cover_credit.name}
+          </a>{" "}
+          on Unsplash
+        </p>
       ) : null}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_280px]">
-        <section>
-          <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
-            About this shot
-          </h2>
-          <p className="mt-3 text-sm leading-7 whitespace-pre-line text-foreground/90">
-            {shot.description ?? "No description was added for this shot."}
-          </p>
+      <ShotRealtime
+        key={shot.id}
+        published={published}
+        shotId={shot.id}
+        shotOwnerId={shot.creator.id}
+        currentUserId={user?.id ?? null}
+        signedIn={Boolean(user)}
+        commentLimit={commentLimit}
+        signInHref={signInHref}
+        initialLiked={liked}
+        initialLikeCount={shot.like_count}
+        initialCommentCount={shot.comment_count}
+        initialComments={comments}
+      >
+        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_280px]">
+          <section>
+            <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
+              About this shot
+            </h2>
+            <p className="mt-3 text-sm leading-7 whitespace-pre-line text-foreground/90">
+              {shot.description ?? "No description was added for this shot."}
+            </p>
 
-          {shot.tags.length > 0 ? (
-            <ul className="mt-6 flex flex-wrap gap-2">
-              {shot.tags.map((tag) => (
-                <li
-                  key={tag.id}
-                  className="rounded-full border border-border px-3 py-1 text-xs text-muted"
-                >
-                  {tag.name}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
+            {shot.tags.length > 0 ? (
+              <ul className="mt-6 flex flex-wrap gap-2">
+                {shot.tags.map((tag) => (
+                  <li
+                    key={tag.id}
+                    className="rounded-full border border-border px-3 py-1 text-xs text-muted"
+                  >
+                    {tag.name}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
 
-        <aside className="h-fit space-y-5 rounded-2xl border border-border bg-white p-5">
-          <Link
-            href={`/u/${shot.creator.username}`}
-            className="flex items-center gap-3 hover:text-brand"
-          >
-            <Avatar
-              src={avatarUrl(shot.creator.avatar_path)}
-              name={shot.creator.display_name}
-              size={44}
-            />
-            <span className="min-w-0">
-              <span className="block truncate font-medium">
-                {shot.creator.display_name}
+          <aside className="h-fit space-y-5 rounded-2xl border border-border bg-white p-5">
+            <Link
+              href={`/u/${shot.creator.username}`}
+              className="flex items-center gap-3 hover:text-brand"
+            >
+              <Avatar
+                src={avatarUrl(shot.creator.avatar_path)}
+                name={shot.creator.display_name}
+                size={44}
+              />
+              <span className="min-w-0">
+                <span className="block truncate font-medium">
+                  {shot.creator.display_name}
+                </span>
+                <span className="block truncate text-xs text-muted">
+                  @{shot.creator.username}
+                </span>
               </span>
-              <span className="block truncate text-xs text-muted">
-                @{shot.creator.username}
-              </span>
-            </span>
-          </Link>
+            </Link>
 
-          {!isOwner ? (
-            <FollowButton
-              profileId={shot.creator.id}
-              following={following}
-              signedIn={Boolean(user)}
-              signInHref={signInHref}
-            />
-          ) : null}
-
-          <dl className="space-y-2 border-t border-border pt-4 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Category</dt>
-              <dd>{shot.category_name}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Published</dt>
-              <dd>{shot.published_at ? formatDate(shot.published_at) : "Not yet"}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted">Likes</dt>
-              <dd>{shot.like_count}</dd>
-            </div>
-            {isOwner ? (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">Visibility</dt>
-                <dd className="capitalize">{shot.status}</dd>
+            {!isOwner ? (
+              <div className="space-y-2">
+                <FollowButton
+                  profileId={shot.creator.id}
+                  following={following}
+                  signedIn={Boolean(user)}
+                  signInHref={signInHref}
+                />
+                <ReportButton
+                  targetType="shot"
+                  shotId={shot.id}
+                  signedIn={Boolean(user)}
+                />
               </div>
             ) : null}
-          </dl>
-        </aside>
-      </div>
 
-      {published ? (
-        <CommentSection
-          shotId={shot.id}
-          shotOwnerId={shot.creator.id}
-          currentUserId={user?.id ?? null}
-          signedIn={Boolean(user)}
-          comments={comments}
-          commentCount={shot.comment_count}
-          limit={commentLimit}
-          signInHref={signInHref}
-        />
-      ) : null}
+            <dl className="space-y-2 border-t border-border pt-4 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted">Category</dt>
+                <dd>{shot.category_name}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted">Published</dt>
+                <dd>{shot.published_at ? formatDate(shot.published_at) : "Not yet"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted">Likes</dt>
+                <dd>{shot.like_count}</dd>
+              </div>
+              {isOwner ? (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted">Visibility</dt>
+                  <dd className="capitalize">{shot.status}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </aside>
+        </div>
+      </ShotRealtime>
     </div>
   );
 }

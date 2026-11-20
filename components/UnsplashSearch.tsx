@@ -1,6 +1,6 @@
-
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 type UnsplashPhoto = {
@@ -17,7 +17,8 @@ type UnsplashPhoto = {
     };
   };
   links: {
-    download_location: string;
+    html: string | null;
+    download_location: string | null;
   };
 };
 
@@ -26,10 +27,7 @@ type UnsplashSearchProps = {
   selectedUrl?: string | null;
 };
 
-export default function UnsplashSearch({
-  onSelect,
-  selectedUrl,
-}: UnsplashSearchProps) {
+export default function UnsplashSearch({ onSelect, selectedUrl }: UnsplashSearchProps) {
   const [query, setQuery] = useState("");
   const [photos, setPhotos] = useState<UnsplashPhoto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +41,7 @@ export default function UnsplashSearch({
 
     try {
       const response = await fetch(
-        `/api/unsplash/search?query=${encodeURIComponent(query)}`
+        `/api/unsplash/search?query=${encodeURIComponent(query)}`,
       );
 
       const data = await response.json();
@@ -88,9 +86,7 @@ export default function UnsplashSearch({
         </button>
       </div>
 
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {photos.map((photo) => {
@@ -102,14 +98,15 @@ export default function UnsplashSearch({
                 type="button"
                 onClick={() => onSelect(photo)}
                 className={`relative block w-full overflow-hidden rounded-lg border-2 ${
-                  isSelected
-                    ? "border-blue-600"
-                    : "border-transparent"
+                  isSelected ? "border-blue-600" : "border-transparent"
                 }`}
               >
-                <img
+                <Image
                   src={photo.urls.small}
                   alt={photo.alt_description || "Unsplash photo"}
+                  width={400}
+                  height={300}
+                  unoptimized
                   className="h-40 w-full object-cover"
                 />
 
@@ -138,9 +135,7 @@ export default function UnsplashSearch({
       </div>
 
       {!loading && !error && photos.length === 0 && (
-        <p className="text-sm text-muted">
-          No images to display. Search for something!
-        </p>
+        <p className="text-sm text-muted">No images to display. Search for something!</p>
       )}
     </div>
   );

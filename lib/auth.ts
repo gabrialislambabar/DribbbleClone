@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { PROFILE_PUBLIC_COLUMNS } from "@/lib/data/profiles";
@@ -39,3 +39,19 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
 
   return data;
 });
+
+export async function requireAdmin() {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!data?.is_admin) {
+    notFound();
+  }
+
+  return user;
+}

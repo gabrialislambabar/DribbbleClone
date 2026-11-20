@@ -1,10 +1,12 @@
 import Link from "next/link";
 
 import { signOut } from "@/app/(auth)/actions";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { SearchForm } from "@/components/search/search-form";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
 import { getCurrentProfile, getUser } from "@/lib/auth";
+import { getUnreadCount } from "@/lib/data/notifications";
 import { isSupabaseConfigured } from "@/lib/env";
 import { avatarUrl } from "@/lib/storage";
 
@@ -12,6 +14,7 @@ export async function SiteHeader() {
   const configured = isSupabaseConfigured();
   const user = configured ? await getUser() : null;
   const profile = user ? await getCurrentProfile() : null;
+  const unread = user ? await getUnreadCount(user.id) : 0;
   const displayName = profile?.display_name ?? user?.email ?? "Account";
 
   return (
@@ -59,6 +62,7 @@ export async function SiteHeader() {
               <Link href="/shots/new" className={buttonClasses("primary", "sm")}>
                 New shot
               </Link>
+              <NotificationBell key={unread} userId={user.id} initialUnread={unread} />
               <Link
                 href="/settings"
                 className="flex items-center gap-2 rounded-full p-1 pr-3 hover:bg-surface"

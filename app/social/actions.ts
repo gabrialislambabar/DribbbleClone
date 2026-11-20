@@ -1,8 +1,12 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
+import { after } from "next/server";
 
 import { requireUser } from "@/lib/auth";
+import { type ActionResult, toSafeMessage } from "@/lib/errors";
+import { userRateLimitError } from "@/lib/rate-limit/server";
+import { broadcastToShot } from "@/lib/realtime/broadcast";
 import { createClient } from "@/lib/supabase/server";
 import { firstZodError } from "@/lib/validation/profile";
 import { commentBodySchema, uuidSchema } from "@/lib/validation/social";
@@ -23,23 +27,20 @@ function revalidateShotState(shotId: string) {
 }
 
 function friendlySocialError(message: string): string {
-  if (message.includes("row-level security policy")) {
-    return "You do not have permission to do that.";
-  }
-
-  if (message.includes("comments_body_len")) {
-    return "Comment must be between 1 and 1,000 characters.";
-  }
-
-  return message;
+  return toSafeMessage(new Error(message), "We couldn't complete that action.");
 }
 
-export async function toggleLike(shotId: string) {
+export async function toggleLike(shotId: string): Promise<ActionResult> {
   const user = await requireUser();
-  const parsed = uuidSchema.safeParse(shotId);
 
+  const limited = await userRateLimitError("like");
+  if (limited) {
+    return { ok: false, error: limited };
+  }
+
+  const parsed = uuidSchema.safeParse(shotId);
   if (!parsed.success) {
-    return;
+    return { ok: false, error: "That shot could not be found." };
   }
 
   const supabase = await createClient();
@@ -58,7 +59,7 @@ export async function toggleLike(shotId: string) {
       .eq("shot_id", parsed.data);
 
     if (error) {
-      throw new Error(error.message);
+      return { ok: false, error: friendlySocialError(error.message) };
     }
   } else {
     const { error } = await supabase
@@ -66,11 +67,29 @@ export async function toggleLike(shotId: string) {
       .insert({ user_id: user.id, shot_id: parsed.data });
 
     if (error && error.code !== "23505") {
-      throw new Error(error.message);
+      return { ok: false, error: friendlySocialError(error.message) };
     }
   }
 
   revalidateShotState(parsed.data);
+
+  const { data: shot } = await supabase
+    .from("shots")
+    .select("like_count")
+    .eq("id", parsed.data)
+    .maybeSingle();
+
+  if (typeof shot?.like_count === "number") {
+    const likeCount = shot.like_count;
+    after(() =>
+      broadcastToShot(parsed.data, "like:changed", {
+        shotId: parsed.data,
+        likeCount,
+      }),
+    );
+  }
+
+  return { ok: true };
 }
 
 export async function addComment(
@@ -79,6 +98,12 @@ export async function addComment(
   formData: FormData,
 ): Promise<CommentActionState> {
   const user = await requireUser();
+
+  const limited = await userRateLimitError("comment");
+  if (limited) {
+    return { error: limited };
+  }
+
   const shot = uuidSchema.safeParse(shotId);
   const body = commentBodySchema.safeParse(formString(formData, "body"));
 
@@ -91,15 +116,60 @@ export async function addComment(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("comments").insert({
-    shot_id: shot.data,
-    author_id: user.id,
-    body: body.data,
-  });
+  const { data: inserted, error } = await supabase
+    .from("comments")
+    .insert({
+      shot_id: shot.data,
+      author_id: user.id,
+      body: body.data,
+    })
+    .select(
+      "id, shot_id, body, created_at, updated_at, author_id, author:profiles!comments_author_id_fkey(username, display_name, avatar_path)",
+    )
+    .single();
 
-  if (error) {
-    return { error: friendlySocialError(error.message) };
+  if (error || !inserted) {
+    return { error: friendlySocialError(error?.message ?? "comment_insert_failed") };
   }
+
+  const insertedComment = inserted as unknown as {
+    id: string;
+    shot_id: string;
+    body: string;
+    created_at: string;
+    updated_at: string;
+    author_id: string;
+    author: {
+      username: string;
+      display_name: string;
+      avatar_path: string | null;
+    } | null;
+  };
+
+  const { data: shotRow } = await supabase
+    .from("shots")
+    .select("comment_count")
+    .eq("id", shot.data)
+    .maybeSingle();
+
+  after(() =>
+    broadcastToShot(shot.data, "comment:new", {
+      comment: {
+        id: insertedComment.id,
+        shot_id: insertedComment.shot_id,
+        body: insertedComment.body,
+        created_at: insertedComment.created_at,
+        updated_at: insertedComment.updated_at,
+        author: {
+          id: insertedComment.author_id,
+          username: insertedComment.author?.username ?? "designer",
+          display_name: insertedComment.author?.display_name ?? "Designer",
+          avatar_path: insertedComment.author?.avatar_path ?? null,
+        },
+      },
+      commentCount: shotRow?.comment_count ?? null,
+    }),
+  );
 
   revalidateShotState(shot.data);
   return { success: true };
@@ -110,7 +180,13 @@ export async function editComment(
   _previousState: CommentActionState,
   formData: FormData,
 ): Promise<CommentActionState> {
-  await requireUser();
+  const user = await requireUser();
+
+  const limited = await userRateLimitError("commentEdit");
+  if (limited) {
+    return { error: limited };
+  }
+
   const comment = uuidSchema.safeParse(commentId);
   const body = commentBodySchema.safeParse(formString(formData, "body"));
 
@@ -137,7 +213,8 @@ export async function editComment(
     .from("comments")
     .update({ body: body.data })
     .eq("id", comment.data)
-    .select("id")
+    .eq("author_id", user.id)
+    .select("id, body, updated_at")
     .maybeSingle();
 
   if (error) {
@@ -148,16 +225,29 @@ export async function editComment(
     return { error: "You can only edit your own comments." };
   }
 
+  after(() =>
+    broadcastToShot(existing.shot_id, "comment:updated", {
+      id: updated.id,
+      body: updated.body,
+      updated_at: updated.updated_at,
+    }),
+  );
+
   revalidateShotState(existing.shot_id);
   return { success: true };
 }
 
-export async function deleteComment(commentId: string) {
+export async function deleteComment(commentId: string): Promise<ActionResult> {
   await requireUser();
-  const parsed = uuidSchema.safeParse(commentId);
 
+  const limited = await userRateLimitError("commentDelete");
+  if (limited) {
+    return { ok: false, error: limited };
+  }
+
+  const parsed = uuidSchema.safeParse(commentId);
   if (!parsed.success) {
-    return;
+    return { ok: false, error: "That comment could not be found." };
   }
 
   const supabase = await createClient();
@@ -168,16 +258,30 @@ export async function deleteComment(commentId: string) {
     .maybeSingle();
 
   if (!existing) {
-    return;
+    return { ok: false, error: "That comment could not be found." };
   }
 
   const { error } = await supabase.from("comments").delete().eq("id", parsed.data);
 
   if (error) {
-    throw new Error(error.message);
+    return { ok: false, error: friendlySocialError(error.message) };
   }
 
+  const { data: shotRow } = await supabase
+    .from("shots")
+    .select("comment_count")
+    .eq("id", existing.shot_id)
+    .maybeSingle();
+
+  after(() =>
+    broadcastToShot(existing.shot_id, "comment:deleted", {
+      id: parsed.data,
+      commentCount: shotRow?.comment_count ?? null,
+    }),
+  );
+
   revalidateShotState(existing.shot_id);
+  return { ok: true };
 }
 
 async function getUsername(profileId: string): Promise<string | null> {
@@ -201,12 +305,17 @@ function revalidateProfilePaths(username: string | null) {
   revalidatePath(`/u/${username}/following`);
 }
 
-export async function followProfile(profileId: string) {
+export async function followProfile(profileId: string): Promise<ActionResult> {
   const user = await requireUser();
-  const parsed = uuidSchema.safeParse(profileId);
 
+  const limited = await userRateLimitError("follow");
+  if (limited) {
+    return { ok: false, error: limited };
+  }
+
+  const parsed = uuidSchema.safeParse(profileId);
   if (!parsed.success || parsed.data === user.id) {
-    return;
+    return { ok: false, error: "That profile could not be followed." };
   }
 
   const supabase = await createClient();
@@ -216,19 +325,25 @@ export async function followProfile(profileId: string) {
   });
 
   if (error && error.code !== "23505") {
-    throw new Error(friendlySocialError(error.message));
+    return { ok: false, error: friendlySocialError(error.message) };
   }
 
   revalidateTag("profiles:public", { expire: 0 });
   revalidateProfilePaths(await getUsername(parsed.data));
+  return { ok: true };
 }
 
-export async function unfollowProfile(profileId: string) {
+export async function unfollowProfile(profileId: string): Promise<ActionResult> {
   const user = await requireUser();
-  const parsed = uuidSchema.safeParse(profileId);
 
+  const limited = await userRateLimitError("follow");
+  if (limited) {
+    return { ok: false, error: limited };
+  }
+
+  const parsed = uuidSchema.safeParse(profileId);
   if (!parsed.success) {
-    return;
+    return { ok: false, error: "That profile could not be found." };
   }
 
   const supabase = await createClient();
@@ -239,9 +354,10 @@ export async function unfollowProfile(profileId: string) {
     .eq("following_id", parsed.data);
 
   if (error) {
-    throw new Error(friendlySocialError(error.message));
+    return { ok: false, error: friendlySocialError(error.message) };
   }
 
   revalidateTag("profiles:public", { expire: 0 });
   revalidateProfilePaths(await getUsername(parsed.data));
+  return { ok: true };
 }

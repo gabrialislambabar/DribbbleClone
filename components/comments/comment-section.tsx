@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
 
 import { CommentForm } from "@/components/comments/comment-form";
 import { CommentItem } from "@/components/comments/comment-item";
-import { COMMENT_MAX, COMMENT_PAGE_SIZE } from "@/lib/data/social";
+import { COMMENT_MAX, COMMENT_PAGE_SIZE } from "@/lib/comments/constants";
 import type { CommentItem as CommentItemType } from "@/lib/types/app";
 
 type CommentSectionProps = {
@@ -49,6 +51,7 @@ export function CommentSection({
             <CommentItem
               key={comment.id}
               comment={comment}
+              signedIn={signedIn}
               canEdit={currentUserId === comment.author.id}
               canDelete={
                 currentUserId === comment.author.id || currentUserId === shotOwnerId

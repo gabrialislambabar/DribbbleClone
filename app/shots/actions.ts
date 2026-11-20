@@ -5,10 +5,18 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
 import { SHOT_COVER_BUCKET } from "@/lib/env";
+import { toSafeMessage } from "@/lib/errors";
+import { enforceUserRateLimit, userRateLimitError } from "@/lib/rate-limit/server";
 import { createClient } from "@/lib/supabase/server";
 import { SHOT_COVER_MAX_BYTES, shotCoverPath, validateImageFile } from "@/lib/storage";
+import { trackUnsplashDownload } from "@/lib/unsplash";
 import { firstZodError } from "@/lib/validation/profile";
-import { parseTagsInput, shotFieldsSchema } from "@/lib/validation/shot";
+import {
+  parseTagsInput,
+  parseUnsplashSelection,
+  shotFieldsSchema,
+  type UnsplashSelection,
+} from "@/lib/validation/shot";
 
 export type ShotFormState = {
   error?: string;
@@ -39,7 +47,7 @@ function friendlyShotError(message: string | undefined): string {
     }
   }
 
-  return message;
+  return toSafeMessage(new Error(message));
 }
 
 function formString(formData: FormData, key: string): string {
@@ -56,37 +64,89 @@ function parseShotFields(formData: FormData) {
   });
 }
 
+type CoverCredits = {
+  name: string | null;
+  url: string | null;
+  photoUrl: string | null;
+  sourceId: string | null;
+  provider: string | null;
+};
+
+const NO_COVER_CREDITS: CoverCredits = {
+  name: null,
+  url: null,
+  photoUrl: null,
+  sourceId: null,
+  provider: null,
+};
+
+function creditsFromUnsplash(selection: UnsplashSelection): CoverCredits {
+  return {
+    name: selection.credit_name,
+    url: selection.credit_url,
+    photoUrl: selection.photo_url,
+    sourceId: selection.source_id,
+    provider: "unsplash",
+  };
+}
+
+function isExternalCover(path: string): boolean {
+  return /^https?:\/\//i.test(path);
+}
+
 export async function createShot(
   _previousState: ShotFormState,
   formData: FormData,
 ): Promise<ShotFormState> {
   const user = await requireUser();
 
+  const limited = await userRateLimitError("shotCreate");
+  if (limited) {
+    return { error: limited };
+  }
+
   const parsed = parseShotFields(formData);
   if (!parsed.success) {
     return { error: firstZodError(parsed.error) };
   }
 
+  const { selection: unsplash, error: unsplashError } = parseUnsplashSelection(formData);
+  if (unsplashError) {
+    return { error: unsplashError };
+  }
+
   const cover = formData.get("cover");
-  if (!(cover instanceof File) || cover.size === 0) {
+  const hasUpload = cover instanceof File && cover.size > 0;
+
+  if (!hasUpload && !unsplash) {
     return { error: "Choose a cover image." };
   }
 
-  const fileError = validateImageFile(cover, SHOT_COVER_MAX_BYTES);
-  if (fileError) {
-    return { error: fileError };
-  }
-
   const supabase = await createClient();
-  const uploadId = crypto.randomUUID();
-  const coverPath = shotCoverPath(user.id, uploadId, cover);
+  let coverPath: string;
+  let credits = NO_COVER_CREDITS;
+  let uploadedPath: string | null = null;
 
-  const { error: uploadError } = await supabase.storage
-    .from(SHOT_COVER_BUCKET)
-    .upload(coverPath, cover, { contentType: cover.type, upsert: false });
+  if (hasUpload) {
+    const file = cover as File;
+    const fileError = validateImageFile(file, SHOT_COVER_MAX_BYTES);
+    if (fileError) {
+      return { error: fileError };
+    }
 
-  if (uploadError) {
-    return { error: uploadError.message };
+    uploadedPath = shotCoverPath(user.id, crypto.randomUUID(), file);
+    const { error: uploadError } = await supabase.storage
+      .from(SHOT_COVER_BUCKET)
+      .upload(uploadedPath, file, { contentType: file.type, upsert: false });
+
+    if (uploadError) {
+      return { error: toSafeMessage(uploadError, "We couldn't upload that image.") };
+    }
+
+    coverPath = uploadedPath;
+  } else {
+    coverPath = unsplash!.cover_path;
+    credits = creditsFromUnsplash(unsplash!);
   }
 
   const { data: shotId, error } = await supabase.rpc("create_shot", {
@@ -95,11 +155,22 @@ export async function createShot(
     p_category_id: parsed.data.category_id,
     p_tags: parsed.data.tags,
     p_cover_path: coverPath,
+    p_cover_credit_name: credits.name,
+    p_cover_credit_url: credits.url,
+    p_cover_photo_url: credits.photoUrl,
+    p_cover_source_id: credits.sourceId,
+    p_cover_provider: credits.provider,
   });
 
   if (error || !shotId) {
-    await supabase.storage.from(SHOT_COVER_BUCKET).remove([coverPath]);
+    if (uploadedPath) {
+      await supabase.storage.from(SHOT_COVER_BUCKET).remove([uploadedPath]);
+    }
     return { error: friendlyShotError(error?.message) };
+  }
+
+  if (unsplash) {
+    trackUnsplashDownload(unsplash.download_location);
   }
 
   revalidatePath("/");
@@ -116,17 +187,30 @@ export async function updateShot(
 ): Promise<ShotFormState> {
   const user = await requireUser();
 
+  const limited = await userRateLimitError("shotUpdate");
+  if (limited) {
+    return { error: limited };
+  }
+
   const parsed = parseShotFields(formData);
   if (!parsed.success) {
     return { error: firstZodError(parsed.error) };
+  }
+
+  const { selection: unsplash, error: unsplashError } = parseUnsplashSelection(formData);
+  if (unsplashError) {
+    return { error: unsplashError };
   }
 
   const supabase = await createClient();
 
   const { data: existing } = await supabase
     .from("shots")
-    .select("cover_image_path")
+    .select(
+      "cover_image_path, cover_credit_name, cover_credit_url, cover_photo_url, cover_source_id, cover_provider",
+    )
     .eq("id", shotId)
+    .eq("creator_id", user.id)
     .maybeSingle();
 
   if (!existing) {
@@ -134,6 +218,13 @@ export async function updateShot(
   }
 
   let coverPath = existing.cover_image_path;
+  let credits: CoverCredits = {
+    name: existing.cover_credit_name,
+    url: existing.cover_credit_url,
+    photoUrl: existing.cover_photo_url,
+    sourceId: existing.cover_source_id,
+    provider: existing.cover_provider,
+  };
   let uploadedPath: string | null = null;
 
   const cover = formData.get("cover");
@@ -149,11 +240,15 @@ export async function updateShot(
       .upload(nextPath, cover, { contentType: cover.type, upsert: false });
 
     if (uploadError) {
-      return { error: uploadError.message };
+      return { error: toSafeMessage(uploadError, "We couldn't upload that image.") };
     }
 
     uploadedPath = nextPath;
     coverPath = nextPath;
+    credits = NO_COVER_CREDITS;
+  } else if (unsplash) {
+    coverPath = unsplash.cover_path;
+    credits = creditsFromUnsplash(unsplash);
   }
 
   const { error } = await supabase.rpc("update_shot", {
@@ -163,6 +258,11 @@ export async function updateShot(
     p_category_id: parsed.data.category_id,
     p_tags: parsed.data.tags,
     p_cover_path: coverPath,
+    p_cover_credit_name: credits.name,
+    p_cover_credit_url: credits.url,
+    p_cover_photo_url: credits.photoUrl,
+    p_cover_source_id: credits.sourceId,
+    p_cover_provider: credits.provider,
   });
 
   if (error) {
@@ -172,8 +272,16 @@ export async function updateShot(
     return { error: friendlyShotError(error.message) };
   }
 
-  if (uploadedPath && existing.cover_image_path !== uploadedPath) {
+  // Only remove the previous cover when it was a storage object that we replaced.
+  if (
+    !isExternalCover(existing.cover_image_path) &&
+    existing.cover_image_path !== coverPath
+  ) {
     await supabase.storage.from(SHOT_COVER_BUCKET).remove([existing.cover_image_path]);
+  }
+
+  if (unsplash) {
+    trackUnsplashDownload(unsplash.download_location);
   }
 
   revalidatePath("/");
@@ -186,6 +294,7 @@ export async function updateShot(
 
 export async function publishShot(shotId: string) {
   await requireUser();
+  await enforceUserRateLimit("shotStatus");
   const supabase = await createClient();
 
   const { error } = await supabase.rpc("set_shot_status", {
@@ -205,6 +314,7 @@ export async function publishShot(shotId: string) {
 
 export async function unpublishShot(shotId: string) {
   await requireUser();
+  await enforceUserRateLimit("shotStatus");
   const supabase = await createClient();
 
   const { error } = await supabase.rpc("set_shot_status", {
@@ -223,20 +333,26 @@ export async function unpublishShot(shotId: string) {
 }
 
 export async function deleteShot(shotId: string) {
-  await requireUser();
+  const user = await requireUser();
+  await enforceUserRateLimit("shotDelete");
   const supabase = await createClient();
 
   const { data: shot } = await supabase
     .from("shots")
     .select("cover_image_path")
     .eq("id", shotId)
+    .eq("creator_id", user.id)
     .maybeSingle();
 
   if (!shot) {
     redirect("/dashboard");
   }
 
-  const { error } = await supabase.from("shots").delete().eq("id", shotId);
+  const { error } = await supabase
+    .from("shots")
+    .delete()
+    .eq("id", shotId)
+    .eq("creator_id", user.id);
 
   if (error) {
     throw new Error(friendlyShotError(error.message));

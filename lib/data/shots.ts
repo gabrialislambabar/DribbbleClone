@@ -3,7 +3,9 @@ import "server-only";
 import { cache } from "react";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ShotListItem } from "@/lib/types/app";
+import { createPublicClient } from "@/lib/supabase/public";
+import { logError } from "@/lib/observability/logger";
+import type { CoverCredit, ShotListItem } from "@/lib/types/app";
 import type { ShotStatus } from "@/lib/types/database";
 
 const SHOT_SELECT = `
@@ -11,6 +13,10 @@ const SHOT_SELECT = `
   title,
   description,
   cover_image_path,
+  cover_credit_name,
+  cover_credit_url,
+  cover_photo_url,
+  cover_provider,
   status,
   category_id,
   creator_id,
@@ -28,6 +34,10 @@ type RawShot = {
   title: string;
   description: string | null;
   cover_image_path: string;
+  cover_credit_name: string | null;
+  cover_credit_url: string | null;
+  cover_photo_url: string | null;
+  cover_provider: string | null;
   status: ShotStatus;
   category_id: string;
   creator_id: string;
@@ -45,12 +55,38 @@ type RawShot = {
   shot_tags: { tags: { id: number; name: string } | null }[] | null;
 };
 
+type CreditColumns = {
+  cover_credit_name: string | null;
+  cover_credit_url: string | null;
+  cover_photo_url: string | null;
+  cover_provider: string | null;
+};
+
+function toCoverCredit(row: CreditColumns): CoverCredit | null {
+  if (
+    !row.cover_credit_name ||
+    !row.cover_credit_url ||
+    !row.cover_photo_url ||
+    !row.cover_provider
+  ) {
+    return null;
+  }
+
+  return {
+    name: row.cover_credit_name,
+    url: row.cover_credit_url,
+    photoUrl: row.cover_photo_url,
+    provider: row.cover_provider,
+  };
+}
+
 function mapShot(row: RawShot): ShotListItem {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
     cover_image_path: row.cover_image_path,
+    cover_credit: toCoverCredit(row),
     status: row.status,
     category_id: row.category_id,
     category_name: row.category?.name ?? "Uncategorized",
@@ -74,6 +110,40 @@ function toRows(data: unknown): RawShot[] {
   return (data ?? []) as RawShot[];
 }
 
+export async function getShotCoverCredits(
+  shotIds: string[],
+): Promise<Map<string, CoverCredit>> {
+  const unique = [...new Set(shotIds)];
+
+  if (unique.length === 0) {
+    return new Map();
+  }
+
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("shots")
+    .select("id, cover_credit_name, cover_credit_url, cover_photo_url, cover_provider")
+    .in("id", unique)
+    .eq("status", "published");
+
+  if (error) {
+    logError("data.shots.credits", error);
+    return new Map();
+  }
+
+  const credits = new Map<string, CoverCredit>();
+
+  for (const row of data ?? []) {
+    const credit = toCoverCredit(row);
+
+    if (credit) {
+      credits.set(row.id, credit);
+    }
+  }
+
+  return credits;
+}
+
 export const SHOTS_PAGE_SIZE = 24;
 
 export const getPublishedShots = cache(async (page: number) => {
@@ -88,7 +158,8 @@ export const getPublishedShots = cache(async (page: number) => {
     .range(from, from + SHOTS_PAGE_SIZE);
 
   if (error) {
-    throw new Error(error.message);
+    logError("data.shots", error);
+    throw new Error("We couldn't load this content right now.");
   }
 
   const rows = toRows(data);
@@ -127,7 +198,8 @@ export const getPublishedShotsByCreator = cache(
       .limit(limit);
 
     if (error) {
-      throw new Error(error.message);
+      logError("data.shots", error);
+      throw new Error("We couldn't load this content right now.");
     }
 
     return toRows(data).map(mapShot);
@@ -144,7 +216,8 @@ export const getShotsForDashboard = cache(
       .order("created_at", { ascending: false });
 
     if (error) {
-      throw new Error(error.message);
+      logError("data.shots", error);
+      throw new Error("We couldn't load this content right now.");
     }
 
     return toRows(data).map(mapShot);

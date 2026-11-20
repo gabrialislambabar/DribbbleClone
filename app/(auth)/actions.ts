@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 
 import { isUsernameTaken } from "@/lib/data/profiles";
 import { getSiteUrl } from "@/lib/env";
+import { toSafeMessage } from "@/lib/errors";
+import { anonRateLimitError } from "@/lib/rate-limit/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   firstZodError,
@@ -27,6 +29,11 @@ export async function signUp(
   _previousState: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
+  const limited = await anonRateLimitError("signUp");
+  if (limited) {
+    return { error: limited };
+  }
+
   const parsed = signUpSchema.safeParse({
     email: formString(formData, "email"),
     password: formString(formData, "password"),
@@ -62,7 +69,7 @@ export async function signUp(
     ) {
       return { error: "That username is taken. Try another one." };
     }
-    return { error: error.message };
+    return { error: toSafeMessage(error, "We could not create your account.") };
   }
 
   return {
@@ -74,6 +81,11 @@ export async function signIn(
   _previousState: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
+  const limited = await anonRateLimitError("auth");
+  if (limited) {
+    return { error: limited };
+  }
+
   const parsed = signInSchema.safeParse({
     email: formString(formData, "email"),
     password: formString(formData, "password"),

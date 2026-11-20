@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { FollowButton } from "@/components/profile/follow-button";
+import { ReportButton } from "@/components/moderation/report-button";
 import { ShotGrid } from "@/components/shots/shot-grid";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
@@ -70,12 +71,19 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   Edit profile
                 </Link>
               ) : (
-                <FollowButton
-                  profileId={profile.id}
-                  following={following}
-                  signedIn={Boolean(user)}
-                  signInHref={`/sign-in?next=/u/${profile.username}`}
-                />
+                <div className="space-y-2">
+                  <FollowButton
+                    profileId={profile.id}
+                    following={following}
+                    signedIn={Boolean(user)}
+                    signInHref={`/sign-in?next=/u/${profile.username}`}
+                  />
+                  <ReportButton
+                    targetType="profile"
+                    profileId={profile.id}
+                    signedIn={Boolean(user)}
+                  />
+                </div>
               )}
             </div>
 

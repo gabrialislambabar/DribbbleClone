@@ -44,7 +44,10 @@ export const signUpSchema = z.object({
 
 export const signInSchema = z.object({
   email: z.email("Enter a valid email address."),
-  password: z.string().min(1, "Password is required."),
+  password: z
+    .string()
+    .min(1, "Password is required.")
+    .max(72, "Password must be 72 characters or fewer."),
 });
 
 export type SignUpInput = z.infer<typeof signUpSchema>;

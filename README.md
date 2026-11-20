@@ -10,10 +10,15 @@ A Dribbble-style community for designers to share shots, build a public profile,
 - **Feeds**: Newest, Popular, and Trending with category/tag/creator filters, 7/30/90-day presets, and keyset (cursor) pagination.
 - **Search**: Postgres full-text search across shot titles, descriptions, and tags, plus designer username/display name/bio.
 - **Social**: likes with unique one-per-user constraints, flat comments with author/owner moderation, follows, and denormalized counts.
-- **Caching**: public feed/search query results are cached with tags for 60 seconds and invalidated immediately on mutations; liked/following state stays per-request.
+- **Notifications**: in-app follow and comment notifications with read/unread state, a header badge, pagination, and per-event preferences. Delivered live through Supabase Realtime (Postgres Changes) with a server-rendered fallback.
+- **Realtime**: private `shot:<id>` Broadcast channels for live comments, edits, deletions, and like counts. Clients are read-only; Server Actions publish with the service role.
+- **Reporting and moderation**: report shots, comments, and profiles; a minimal `/moderation` queue for admins to dismiss reports or take content down.
+- **Abuse controls**: per-user Postgres rate limits for writes plus per-IP in-memory limits for sign-in, sign-up, search, and the Unsplash proxy. Uploads, queries, and upstream calls are bounded.
+- **Observability**: optional Sentry error reporting with cookie/header/user scrubbing, error boundaries, a redacting server logger, and `GET /api/health`.
+- **Caching**: public feed/search query results are cached with tags for 60 seconds and invalidated immediately on mutations; liked/following state stays per-request. Notifications are never cached.
 - Postgres constraints, RLS on every table, and `security definer` RPCs for atomic shot + tag writes and aggregate feed reads.
 
-Deferred: notifications, bookmarks/collections, realtime, moderation tools, admin UI, password reset, and an external search service.
+Deferred: email notifications, bookmarks/collections, blocking/muting, password reset, an external search service, and automated background cleanup jobs.
 
 ## Setup
 
@@ -43,6 +48,8 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 SUPABASE_PROJECT_ID=<project-ref>
 ```
 
+Optional Sentry and test variables (see `.env.local.example`): `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_ADMIN_EMAIL`, `PLAYWRIGHT_ADMIN_PASSWORD`, `PLAYWRIGHT_REALTIME`.
+
 ### 4. Run the migrations
 
 Open the Supabase SQL editor and run, in order:
@@ -53,10 +60,15 @@ Open the Supabase SQL editor and run, in order:
 4. `supabase/migrations/0004_social.sql`
 5. `supabase/migrations/0005_search.sql`
 6. `supabase/migrations/0006_feed_functions.sql`
+7. `supabase/migrations/0007_external_covers.sql`
+8. `supabase/migrations/0008_rate_limits.sql`
+9. `supabase/migrations/0009_reports.sql`
+10. `supabase/migrations/0010_notifications.sql`
+11. `supabase/migrations/0011_realtime_authorization.sql`
 
 Or link the CLI and push: `npx supabase link --project-ref <ref>` then `npx supabase db push`.
 
-Migrations 0004–0006 add likes, comments, follows, counters, full-text search vectors, feed/search RPCs, and the indexes those queries rely on. Runner notes:
+Migrations 0004–0011 add likes, comments, follows, counters, full-text search vectors, feed/search RPCs, external cover credits, rate limits, reports/moderation, notifications, and realtime authorization. Runner notes:
 
 - 0004–0006 are safe to re-run (they use `if not exists` / `create or replace`).
 - The counter backfill only touches rows whose counts differ, so re-running does not churn `updated_at`.
@@ -105,6 +117,10 @@ Visit http://localhost:3000.
 | `npm run format:check` | Prettier check                          |
 | `npm run db:types`     | Regenerate Supabase types               |
 | `npm run seed`         | Seed demo users, shots, and social data |
+| `npm run audit`        | Audit production dependencies           |
+| `npm run test:e2e`     | Run the Playwright suite                |
+| `npm run test:e2e:ui`  | Run Playwright in UI mode               |
+| `npm run test:e2e:report` | Open the last Playwright report      |
 
 ## Feed and search semantics
 
@@ -129,7 +145,27 @@ Visit http://localhost:3000.
 - **Search** uses generated `tsvector` columns with GIN indexes. Shot tags feed `tags_text`, which is rebuilt by a trigger on `shot_tags`.
 - **Caching**: feed/search queries run through `lib/supabase/public.ts` (no cookies) inside `unstable_cache` with tags (`shots:feed`, `profiles:public`) and a 60-second lifetime. Mutations call `revalidateTag(tag, { expire: 0 })` for immediate read-your-own-writes. Per-user liked/following state is fetched outside the cache.
 - **Account deletion** uses the service-role client to remove storage objects before deleting the auth user, which cascades profiles, shots, likes, comments, and follows.
-- **Proxy** (`proxy.ts`, Next.js 16's name for middleware) refreshes Supabase cookies and performs optimistic redirects for protected routes. Every Server Action still checks the session itself.
+- **Proxy** (`proxy.ts`, Next.js 16's name for middleware) refreshes Supabase cookies, performs optimistic redirects for protected routes, and throttles anonymous `/search` requests. Every Server Action still checks the session itself.
+- **Rate limits** are configured in `lib/rate-limit/config.ts`. Authenticated actions call the `consume_rate_limit` RPC; anonymous traffic uses per-instance in-memory buckets keyed by client IP.
+- **Notifications** are inserted by `security definer` triggers on `follows` and `comments`, honoring `notification_preferences`. The header badge and list are per-user and never cached; the badge updates through Realtime Postgres Changes.
+- **Realtime** uses private `shot:<id>` Broadcast channels. `realtime.messages` only grants SELECT to viewers of a published/owned shot; there is no client INSERT policy. Server Actions publish through the Realtime REST API with the service role, so clients cannot forge events.
+- **Reporting** stores one report per user per target. Reporters can read their own reports; admins (`profiles.is_admin`) see and resolve all of them. Take-down unpublishes shots or deletes comments and leaves an audit trail on the report.
+- **Safe errors**: actions return friendly messages for validation, permission, duplicate, and rate-limit failures. Internal database details are logged and never returned.
+- **Observability**: Sentry is optional and disabled without a DSN; `beforeSend` scrubs cookies, auth headers, email, and IP. `GET /api/health` is safe to expose.
+
+## Testing
+
+Playwright specs live in `e2e/` and map to the quality checklist:
+
+```bash
+npx supabase db push --dry-run   # review 0009–0011
+npm run seed
+npm run test:e2e
+```
+
+The moderation spec needs a promoted admin (`update public.profiles set is_admin = true where username = '<name>';`) and `PLAYWRIGHT_ADMIN_EMAIL`/`PLAYWRIGHT_ADMIN_PASSWORD`. Realtime specs are skipped unless `PLAYWRIGHT_REALTIME=1` and Realtime is enabled in Supabase.
+
+See `docs/qa-checklist.md` for the manual pass, `docs/security.md` for the endpoint/authorization model, and `docs/operations.md` for migrations, env, monitoring, moderation bootstrap, and backups.
 
 ## Backup and restore expectations
 

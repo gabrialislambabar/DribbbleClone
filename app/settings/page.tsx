@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 
 import { DeleteAccount } from "@/components/profile/delete-account";
 import { ProfileForm } from "@/components/profile/profile-form";
+import { NotificationPreferencesForm } from "@/components/notifications/notification-preferences-form";
 import { getCurrentProfile, getUser } from "@/lib/auth";
+import { getNotificationPreferences } from "@/lib/data/notifications";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -20,6 +22,8 @@ export default async function SettingsPage() {
     redirect("/sign-in");
   }
 
+  const notificationPreferences = await getNotificationPreferences(user.id);
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-10">
       <div>
@@ -28,6 +32,8 @@ export default async function SettingsPage() {
       </div>
 
       <ProfileForm profile={profile} />
+
+      <NotificationPreferencesForm preferences={notificationPreferences} />
 
       <DeleteAccount
         username={profile.username}
