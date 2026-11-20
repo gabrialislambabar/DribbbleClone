@@ -12,7 +12,9 @@
     "format:check": "prettier --check .",
     "audit": "npm audit --omit=dev",
     "db:types": "node scripts/db-types.mjs",
+    "check:env": "node --env-file=.env.local scripts/check-env.mjs",
     "seed": "node --env-file=.env.local scripts/seed.mjs",
+    "seed:unsplash": "node --env-file=.env.local scripts/seed.mjs --unsplash",
     "test:e2e": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test",
     "test:e2e:ui": "node --env-file-if-exists=.env.local node_modules/@playwright/test/cli.js test --ui",
     "test:e2e:report": "node node_modules/@playwright/test/cli.js show-report"

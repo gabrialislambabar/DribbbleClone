@@ -107,20 +107,21 @@ Visit http://localhost:3000.
 
 ## Scripts
 
-| Script                 | Purpose                                 |
-| ---------------------- | --------------------------------------- |
-| `npm run dev`          | Start the dev server                    |
-| `npm run build`        | Production build                        |
-| `npm run lint`         | ESLint                                  |
-| `npm run typecheck`    | `tsc --noEmit`                          |
-| `npm run format`       | Prettier write                          |
-| `npm run format:check` | Prettier check                          |
-| `npm run db:types`     | Regenerate Supabase types               |
-| `npm run seed`         | Seed demo users, shots, and social data |
-| `npm run audit`        | Audit production dependencies           |
-| `npm run test:e2e`     | Run the Playwright suite                |
-| `npm run test:e2e:ui`  | Run Playwright in UI mode               |
-| `npm run test:e2e:report` | Open the last Playwright report      |
+| Script                    | Purpose                                 |
+| ------------------------- | --------------------------------------- |
+| `npm run dev`             | Start the dev server                    |
+| `npm run build`           | Production build                        |
+| `npm run lint`            | ESLint                                  |
+| `npm run typecheck`       | `tsc --noEmit`                          |
+| `npm run format`          | Prettier write                          |
+| `npm run format:check`    | Prettier check                          |
+| `npm run db:types`        | Regenerate Supabase types               |
+| `npm run check:env`       | Verify Supabase keys match the project  |
+| `npm run seed`            | Seed demo users, shots, and social data |
+| `npm run audit`           | Audit production dependencies           |
+| `npm run test:e2e`        | Run the Playwright suite                |
+| `npm run test:e2e:ui`     | Run Playwright in UI mode               |
+| `npm run test:e2e:report` | Open the last Playwright report         |
 
 ## Feed and search semantics
 

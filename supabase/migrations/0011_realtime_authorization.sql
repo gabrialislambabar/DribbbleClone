@@ -1,10 +1,12 @@
 -- 0011_realtime_authorization.sql
 -- Authorize private shot broadcast channels. Clients may only read; the app
 -- publishes through the Realtime REST API with the service role.
+--
+-- Do not add `alter table realtime.messages enable row level security`:
+-- realtime.messages is owned by supabase_realtime_admin, ALTER TABLE is refused
+-- for the postgres role, and RLS is already enabled on it.
 
 begin;
-
-alter table realtime.messages enable row level security;
 
 drop policy if exists "shot rooms are readable by viewers" on realtime.messages;
 create policy "shot rooms are readable by viewers"

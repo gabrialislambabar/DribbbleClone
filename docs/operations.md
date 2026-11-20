@@ -24,6 +24,17 @@ npx supabase db push --dry-run
 
 After schema changes, regenerate types with `npm run db:types` (requires `SUPABASE_PROJECT_ID` and a logged-in CLI) or update `lib/types/database.ts` by hand to match the migration.
 
+## Verify the environment before seeding
+
+```bash
+npm run check:env
+```
+
+It decodes the anon and service-role keys and fails when either key belongs to a
+different Supabase project than `NEXT_PUBLIC_SUPABASE_URL`, then probes the app
+tables. Fix what it reports instead of debugging a mid-seed `401`. `npm run seed`
+and `npm run seed:unsplash` run the same preflight.
+
 ## Environment
 
 Per environment (development, preview, production):

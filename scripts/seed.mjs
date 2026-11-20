@@ -5,11 +5,15 @@ import { fileURLToPath } from "node:url";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { checkSupabaseEnv, describeSupabaseFix } from "./supabase-env.mjs";
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
 const force = process.argv.includes("--force");
+const useUnsplash = process.argv.includes("--unsplash");
 const localSite = /localhost|127\.0\.0\.1/.test(siteUrl);
 
 if (!url || !serviceKey) {
@@ -19,9 +23,23 @@ if (!url || !serviceKey) {
   process.exit(1);
 }
 
+const envCheck = checkSupabaseEnv();
+
+if (envCheck.problems.length > 0) {
+  console.error(describeSupabaseFix(envCheck));
+  process.exit(1);
+}
+
 if (!localSite && !force) {
   console.error(
     `Refusing to seed a non-local site (${siteUrl}). Re-run with --force if this is intentional.`,
+  );
+  process.exit(1);
+}
+
+if (useUnsplash && !unsplashKey) {
+  console.error(
+    "Missing UNSPLASH_ACCESS_KEY for --unsplash. Add it to .env.local first.",
   );
   process.exit(1);
 }
@@ -339,6 +357,82 @@ function daysAgo(days) {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+const UNSPLASH_QUERIES = {
+  "mobile-design": ["mobile app", "mobile ui", "smartphone"],
+  "product-design": ["dashboard", "analytics", "workspace"],
+  branding: ["brand identity", "typography", "stationery"],
+  "web-design": ["web design", "website", "laptop workspace"],
+  illustration: ["illustration", "sketch", "drawing"],
+  animation: ["abstract motion", "gradient abstract", "light trails"],
+};
+
+const unsplashCache = new Map();
+
+async function fetchUnsplashPhoto(query) {
+  if (unsplashCache.has(query)) {
+    return unsplashCache.get(query);
+  }
+
+  const response = await fetch(
+    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&orientation=landscape&per_page=5`,
+    {
+      headers: {
+        Authorization: `Client-ID ${unsplashKey}`,
+        "Accept-Version": "v1",
+      },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Unsplash responded ${response.status} for "${query}"`);
+  }
+
+  const body = await response.json();
+  const photo = (body.results ?? []).find(
+    (item) => item.urls?.regular && item.links?.html && item.user?.links?.html,
+  );
+
+  if (!photo) {
+    throw new Error(`No Unsplash results for "${query}"`);
+  }
+
+  const mapped = {
+    coverPath: photo.urls.regular,
+    creditName: photo.user.name ?? "Unsplash contributor",
+    creditUrl: photo.user.links.html,
+    photoUrl: photo.links.html,
+    sourceId: photo.id,
+    downloadLocation: photo.links.download_location,
+  };
+
+  unsplashCache.set(query, mapped);
+  return mapped;
+}
+
+async function resolveUnsplashCover(plan, index) {
+  const queries = UNSPLASH_QUERIES[plan.category] ?? ["design"];
+  const query = queries[index % queries.length];
+  return fetchUnsplashPhoto(query);
+}
+
+async function trackUnsplashDownload(location) {
+  if (!location) {
+    return;
+  }
+
+  try {
+    const target = new URL(location);
+    target.searchParams.set("client_id", unsplashKey);
+    await fetch(target, {
+      headers: { "Accept-Version": "v1" },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // Download tracking is best-effort; seeding should not fail because of it.
+  }
+}
+
 async function findUserByEmail(email) {
   for (let page = 1; ; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({
@@ -380,7 +474,12 @@ async function ensureUser(spec) {
   });
 
   if (error) {
-    throw error;
+    throw new Error(
+      `Could not create ${spec.email}: ${error.message}` +
+        (error.status === 401
+          ? "\n  The service role key does not belong to NEXT_PUBLIC_SUPABASE_URL. Run `npm run check:env`."
+          : ""),
+    );
   }
 
   return data.user;
@@ -501,27 +600,59 @@ async function main() {
   }
 
   const tagMap = await loadTagMap();
-  const covers = await Promise.all(
-    [1, 2, 3, 4].map((index) =>
-      readFile(path.join(here, "seed-assets", `cover-${index}.png`)),
-    ),
+  const useLocalCovers = !useUnsplash;
+  const covers = useLocalCovers
+    ? await Promise.all(
+        [1, 2, 3, 4].map((index) =>
+          readFile(path.join(here, "seed-assets", `cover-${index}.png`)),
+        ),
+      )
+    : [];
+
+  console.log(
+    `Creating ${SHOT_PLANS.length} shots${
+      useLocalCovers ? "" : " with Unsplash covers"
+    }…`,
   );
 
-  console.log(`Creating ${SHOT_PLANS.length} shots…`);
-
-  for (const plan of SHOT_PLANS) {
+  for (const [planIndex, plan] of SHOT_PLANS.entries()) {
     const owner = users[plan.owner].auth;
-    const cover = covers[plan.cover % covers.length];
-    const coverPath = `${owner.id}/${randomUUID()}/cover.png`;
-    const { error: uploadError } = await supabase.storage
-      .from("shot-covers")
-      .upload(coverPath, cover, { contentType: "image/png", upsert: false });
+    const publishedAt = daysAgo(plan.daysAgo);
+    let coverFields;
+    let downloadLocation = null;
 
-    if (uploadError) {
-      throw uploadError;
+    if (useUnsplash) {
+      const photo = await resolveUnsplashCover(plan, planIndex);
+      downloadLocation = photo.downloadLocation;
+      coverFields = {
+        cover_image_path: photo.coverPath,
+        cover_credit_name: photo.creditName,
+        cover_credit_url: photo.creditUrl,
+        cover_photo_url: photo.photoUrl,
+        cover_source_id: photo.sourceId,
+        cover_provider: "unsplash",
+      };
+    } else {
+      const cover = covers[plan.cover % covers.length];
+      const coverPath = `${owner.id}/${randomUUID()}/cover.png`;
+      const { error: uploadError } = await supabase.storage
+        .from("shot-covers")
+        .upload(coverPath, cover, { contentType: "image/png", upsert: false });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      coverFields = {
+        cover_image_path: coverPath,
+        cover_credit_name: null,
+        cover_credit_url: null,
+        cover_photo_url: null,
+        cover_source_id: null,
+        cover_provider: null,
+      };
     }
 
-    const publishedAt = daysAgo(plan.daysAgo);
     const { data: shot, error: shotError } = await supabase
       .from("shots")
       .insert({
@@ -529,7 +660,7 @@ async function main() {
         category_id: plan.category,
         title: plan.title,
         description: plan.description,
-        cover_image_path: coverPath,
+        ...coverFields,
         status: "published",
         created_at: daysAgo(plan.daysAgo + 1),
         published_at: publishedAt,
@@ -539,6 +670,10 @@ async function main() {
 
     if (shotError) {
       throw shotError;
+    }
+
+    if (coverFields.cover_provider === "unsplash") {
+      await trackUnsplashDownload(downloadLocation);
     }
 
     const shotTagRows = [];
@@ -621,6 +756,18 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  const message = error?.message ?? String(error);
+  console.error(message);
+
+  if (error?.status === 401 || error?.status === 403) {
+    console.error(
+      "\nSupabase rejected the request. Run `npm run check:env` to confirm the keys\nand then apply supabase/migrations/0012_service_role_grants.sql if tables are denied.",
+    );
+  } else if (/permission denied for table|42501/.test(message)) {
+    console.error(
+      "\nThe service role lacks table grants. Run\nsupabase/migrations/0012_service_role_grants.sql in the SQL editor, then retry.",
+    );
+  }
+
   process.exit(1);
 });

@@ -6,9 +6,15 @@ import { createPublicClient } from "@/lib/supabase/public";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const checks = {
+    supabase: "unconfigured",
+    unsplash: process.env.UNSPLASH_ACCESS_KEY ? "configured" : "unconfigured",
+    sentry: process.env.SENTRY_DSN ? "configured" : "unconfigured",
+  };
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
-      { ok: false, checks: { supabase: "unconfigured" } },
+      { ok: false, checks },
       { status: 503, headers: { "cache-control": "no-store" } },
     );
   }
@@ -19,18 +25,18 @@ export async function GET() {
 
     if (error) {
       return NextResponse.json(
-        { ok: false, checks: { supabase: "error" } },
+        { ok: false, checks: { ...checks, supabase: "error" } },
         { status: 503, headers: { "cache-control": "no-store" } },
       );
     }
 
     return NextResponse.json(
-      { ok: true, checks: { supabase: "ok" } },
+      { ok: true, checks: { ...checks, supabase: "ok" } },
       { headers: { "cache-control": "no-store" } },
     );
   } catch {
     return NextResponse.json(
-      { ok: false, checks: { supabase: "error" } },
+      { ok: false, checks: { ...checks, supabase: "error" } },
       { status: 503, headers: { "cache-control": "no-store" } },
     );
   }
