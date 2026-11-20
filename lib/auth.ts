@@ -4,6 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { PROFILE_PUBLIC_COLUMNS } from "@/lib/data/profiles";
 import type { Profile } from "@/lib/types/app";
 
 export const getUser = cache(async () => {
@@ -32,7 +33,7 @@ export const getCurrentProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("*")
+    .select(PROFILE_PUBLIC_COLUMNS)
     .eq("id", user.id)
     .maybeSingle();
 

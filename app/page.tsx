@@ -1,19 +1,31 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { FeedFilters } from "@/components/feed/feed-filters";
+import { FeedTabs } from "@/components/feed/feed-tabs";
+import { LoadMore } from "@/components/feed/load-more";
 import { SetupNotice } from "@/components/layout/setup-notice";
 import { ShotGrid } from "@/components/shots/shot-grid";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { getPublishedShots } from "@/lib/data/shots";
+import { getUser } from "@/lib/auth";
+import { getCategories } from "@/lib/data/categories";
+import { getShotsFeed } from "@/lib/data/feed";
 import { isSupabaseConfigured } from "@/lib/env";
+import { buildFeedHref, parseFeedParams } from "@/lib/feed/params";
 
 export const metadata: Metadata = {
   title: "Discover design work",
 };
 
 type HomePageProps = {
-  searchParams: Promise<{ page?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const SORT_DESCRIPTIONS = {
+  newest: "Fresh shots from designers around the community, newest publications first.",
+  popular: "The shots with the most likes across the community.",
+  trending: "Shots getting attention right now, weighted toward recent likes.",
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -21,43 +33,86 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     return <SetupNotice />;
   }
 
-  const params = await searchParams;
-  const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
-  const page = Math.max(1, Number.parseInt(rawPage ?? "1", 10) || 1);
-  const { shots, hasMore } = await getPublishedShots(page);
+  const params = parseFeedParams(await searchParams);
+  const [categories, feed, user] = await Promise.all([
+    getCategories(),
+    getShotsFeed(params),
+    getUser(),
+  ]);
+
+  const hasFilters = Boolean(
+    params.categoryId ||
+    params.tag ||
+    params.creator ||
+    (params.sort !== "newest" && params.days),
+  );
+
+  const nextHref = feed.nextCursor
+    ? buildFeedHref({
+        sort: params.sort,
+        categoryId: params.categoryId,
+        tag: params.tag,
+        creator: params.creator,
+        days: params.days,
+        cursor: feed.nextCursor,
+      })
+    : null;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
-      <section className="mb-8">
+      <section className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Discover design work
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
-          Fresh shots from designers around the community. Newest publications first.
+          {SORT_DESCRIPTIONS[params.sort]}
         </p>
       </section>
 
-      {shots.length === 0 ? (
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <FeedTabs params={params} />
+        {hasFilters ? (
+          <Link
+            href={buildFeedHref({ sort: params.sort })}
+            className="text-sm text-muted hover:text-foreground"
+          >
+            Clear filters
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mb-8">
+        <FeedFilters params={params} categories={categories} />
+      </div>
+
+      {feed.shots.length === 0 ? (
         <EmptyState
-          title="No shots yet"
-          description="Once designers publish their work, it will show up here."
+          title={hasFilters ? "No shots match these filters" : "No shots yet"}
+          description={
+            hasFilters
+              ? "Try a different category, tag, designer, or time window."
+              : "Once designers publish their work, it will show up here."
+          }
           action={
-            <Link href="/sign-up" className={buttonClasses()}>
-              Join and share your first shot
-            </Link>
+            hasFilters ? (
+              <Link
+                href={buildFeedHref({ sort: params.sort })}
+                className={buttonClasses("secondary")}
+              >
+                Clear filters
+              </Link>
+            ) : (
+              <Link href="/sign-up" className={buttonClasses()}>
+                Join and share your first shot
+              </Link>
+            )
           }
         />
       ) : (
-        <ShotGrid shots={shots} />
+        <ShotGrid shots={feed.shots} likeable signedIn={Boolean(user)} />
       )}
 
-      {hasMore ? (
-        <div className="mt-10 flex justify-center">
-          <Link href={`/?page=${page + 1}`} className={buttonClasses("secondary")}>
-            Load more
-          </Link>
-        </div>
-      ) : null}
+      {nextHref ? <LoadMore href={nextHref} /> : null}
     </div>
   );
 }

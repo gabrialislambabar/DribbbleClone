@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
@@ -97,6 +97,8 @@ export async function updateProfile(
 
   revalidatePath("/settings");
   revalidatePath(`/u/${profile.username}`);
+  revalidateTag("profiles:public", { expire: 0 });
+  revalidateTag("shots:feed", { expire: 0 });
 
   return { success: "Profile updated." };
 }
@@ -159,6 +161,8 @@ export async function deleteAccount(
   const supabase = await createClient();
   await supabase.auth.signOut({ scope: "local" });
 
+  revalidateTag("profiles:public", { expire: 0 });
+  revalidateTag("shots:feed", { expire: 0 });
   revalidatePath("/", "layout");
   redirect("/");
 }

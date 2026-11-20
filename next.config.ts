@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
 const nextConfig: NextConfig = {
   reactCompiler: true,
   experimental: {
@@ -9,16 +7,17 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "6mb",
     },
   },
-  images: supabaseUrl
-    ? {
-        remotePatterns: [
-          {
-            protocol: "https",
-            hostname: new URL(supabaseUrl).hostname,
-          },
-        ],
-      }
-    : undefined,
+  images: {
+    // next.config.ts is evaluated before .env files are loaded, so deriving the
+    // hostname from NEXT_PUBLIC_SUPABASE_URL is unreliable. Supabase project
+    // hosts are always https://<ref>.supabase.co.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+      },
+    ],
+  },
   turbopack: {
     rules: {
       "*.css": {

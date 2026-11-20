@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { signOut } from "@/app/(auth)/actions";
+import { SearchForm } from "@/components/search/search-form";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
 import { getCurrentProfile, getUser } from "@/lib/auth";
@@ -43,6 +44,8 @@ export async function SiteHeader() {
             ) : null}
           </nav>
         </div>
+
+        <SearchForm className="hidden w-64 md:block" />
 
         <div className="flex items-center gap-2">
           {!configured ? (

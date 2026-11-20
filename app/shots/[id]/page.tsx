@@ -3,16 +3,27 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommentSection } from "@/components/comments/comment-section";
+import { FollowButton } from "@/components/profile/follow-button";
+import { LikeButton } from "@/components/shots/like-button";
 import { ShotActions } from "@/components/shots/shot-actions";
 import { ShotStatusBadge } from "@/components/shots/shot-status-badge";
 import { Avatar } from "@/components/ui/avatar";
 import { getUser } from "@/lib/auth";
+import {
+  COMMENT_MAX,
+  COMMENT_PAGE_SIZE,
+  getComments,
+  getFollowState,
+  isShotLiked,
+} from "@/lib/data/social";
 import { getShotById } from "@/lib/data/shots";
 import { avatarUrl, shotCoverUrl } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 
 type ShotPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ comments?: string | string[] }>;
 };
 
 export async function generateMetadata({ params }: ShotPageProps): Promise<Metadata> {
@@ -24,7 +35,18 @@ export async function generateMetadata({ params }: ShotPageProps): Promise<Metad
   };
 }
 
-export default async function ShotPage({ params }: ShotPageProps) {
+function parseCommentLimit(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(raw ?? "", 10);
+
+  if (!Number.isFinite(parsed)) {
+    return COMMENT_PAGE_SIZE;
+  }
+
+  return Math.min(Math.max(parsed, COMMENT_PAGE_SIZE), COMMENT_MAX);
+}
+
+export default async function ShotPage({ params, searchParams }: ShotPageProps) {
   const { id } = await params;
   const shot = await getShotById(id);
 
@@ -35,6 +57,18 @@ export default async function ShotPage({ params }: ShotPageProps) {
   const user = await getUser();
   const isOwner = user?.id === shot.creator.id;
   const cover = shotCoverUrl(shot.cover_image_path);
+  const published = shot.status === "published";
+  const commentLimit = parseCommentLimit((await searchParams).comments);
+
+  const [liked, following, comments] = await Promise.all([
+    user && published ? isShotLiked(shot.id, user.id) : Promise.resolve(false),
+    user && published && !isOwner
+      ? getFollowState(user.id, shot.creator.id)
+      : Promise.resolve(false),
+    published ? getComments(shot.id, commentLimit) : Promise.resolve([]),
+  ]);
+
+  const signInHref = `/sign-in?next=/shots/${shot.id}`;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
@@ -71,6 +105,23 @@ export default async function ShotPage({ params }: ShotPageProps) {
           />
         ) : null}
       </div>
+
+      {published ? (
+        <div className="mt-4 flex items-center gap-4">
+          <LikeButton
+            shotId={shot.id}
+            liked={liked}
+            count={shot.like_count}
+            interactive={Boolean(user)}
+          />
+          <Link
+            href="#comments"
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-muted hover:bg-surface hover:text-foreground"
+          >
+            {shot.comment_count} comments
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_280px]">
         <section>
@@ -115,6 +166,15 @@ export default async function ShotPage({ params }: ShotPageProps) {
             </span>
           </Link>
 
+          {!isOwner ? (
+            <FollowButton
+              profileId={shot.creator.id}
+              following={following}
+              signedIn={Boolean(user)}
+              signInHref={signInHref}
+            />
+          ) : null}
+
           <dl className="space-y-2 border-t border-border pt-4 text-sm">
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">Category</dt>
@@ -123,6 +183,10 @@ export default async function ShotPage({ params }: ShotPageProps) {
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">Published</dt>
               <dd>{shot.published_at ? formatDate(shot.published_at) : "Not yet"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">Likes</dt>
+              <dd>{shot.like_count}</dd>
             </div>
             {isOwner ? (
               <div className="flex items-center justify-between gap-3">
@@ -133,6 +197,19 @@ export default async function ShotPage({ params }: ShotPageProps) {
           </dl>
         </aside>
       </div>
+
+      {published ? (
+        <CommentSection
+          shotId={shot.id}
+          shotOwnerId={shot.creator.id}
+          currentUserId={user?.id ?? null}
+          signedIn={Boolean(user)}
+          comments={comments}
+          commentCount={shot.comment_count}
+          limit={commentLimit}
+          signInHref={signInHref}
+        />
+      ) : null}
     </div>
   );
 }

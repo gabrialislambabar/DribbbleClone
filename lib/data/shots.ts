@@ -16,6 +16,8 @@ const SHOT_SELECT = `
   creator_id,
   created_at,
   published_at,
+  like_count,
+  comment_count,
   creator:profiles!shots_creator_id_fkey(id, username, display_name, avatar_path),
   category:categories!shots_category_id_fkey(id, name),
   shot_tags(tags(id, name))
@@ -31,6 +33,8 @@ type RawShot = {
   creator_id: string;
   created_at: string;
   published_at: string | null;
+  like_count: number;
+  comment_count: number;
   creator: {
     id: string;
     username: string;
@@ -52,6 +56,8 @@ function mapShot(row: RawShot): ShotListItem {
     category_name: row.category?.name ?? "Uncategorized",
     created_at: row.created_at,
     published_at: row.published_at,
+    like_count: row.like_count,
+    comment_count: row.comment_count,
     creator: {
       id: row.creator?.id ?? row.creator_id,
       username: row.creator?.username ?? "unknown",

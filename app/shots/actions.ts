@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
@@ -104,6 +104,7 @@ export async function createShot(
 
   revalidatePath("/");
   revalidatePath("/dashboard");
+  revalidateTag("shots:feed", { expire: 0 });
 
   redirect(`/shots/${shotId}`);
 }
@@ -178,6 +179,7 @@ export async function updateShot(
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath(`/shots/${shotId}`);
+  revalidateTag("shots:feed", { expire: 0 });
 
   redirect(`/shots/${shotId}`);
 }
@@ -198,6 +200,7 @@ export async function publishShot(shotId: string) {
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath(`/shots/${shotId}`);
+  revalidateTag("shots:feed", { expire: 0 });
 }
 
 export async function unpublishShot(shotId: string) {
@@ -216,6 +219,7 @@ export async function unpublishShot(shotId: string) {
   revalidatePath("/");
   revalidatePath("/dashboard");
   revalidatePath(`/shots/${shotId}`);
+  revalidateTag("shots:feed", { expire: 0 });
 }
 
 export async function deleteShot(shotId: string) {
@@ -242,6 +246,7 @@ export async function deleteShot(shotId: string) {
 
   revalidatePath("/");
   revalidatePath("/dashboard");
+  revalidateTag("shots:feed", { expire: 0 });
 
   redirect("/dashboard");
 }

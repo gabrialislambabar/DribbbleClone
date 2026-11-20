@@ -1,15 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { LikeButton } from "@/components/shots/like-button";
 import { Avatar } from "@/components/ui/avatar";
+import { CommentIcon, HeartIcon } from "@/components/ui/icons";
 import { avatarUrl, shotCoverUrl } from "@/lib/storage";
 import type { ShotListItem } from "@/lib/types/app";
 
 type ShotCardProps = {
   shot: ShotListItem;
+  likeable?: boolean;
+  signedIn?: boolean;
 };
 
-export function ShotCard({ shot }: ShotCardProps) {
+export function ShotCard({ shot, likeable = false, signedIn = false }: ShotCardProps) {
   const cover = shotCoverUrl(shot.cover_image_path);
 
   return (
@@ -41,7 +45,7 @@ export function ShotCard({ shot }: ShotCardProps) {
           </span>
         </div>
 
-        <div className="mt-auto flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <Avatar
             src={avatarUrl(shot.creator.avatar_path)}
             name={shot.creator.display_name}
@@ -67,6 +71,30 @@ export function ShotCard({ shot }: ShotCardProps) {
             ))}
           </ul>
         ) : null}
+
+        <div className="mt-auto flex items-center gap-3 border-t border-border pt-3">
+          {likeable ? (
+            <LikeButton
+              shotId={shot.id}
+              liked={Boolean(shot.liked_by_me)}
+              count={shot.like_count}
+              interactive={signedIn}
+            />
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+              <HeartIcon />
+              {shot.like_count}
+            </span>
+          )}
+
+          <Link
+            href={`/shots/${shot.id}#comments`}
+            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground"
+          >
+            <CommentIcon />
+            {shot.comment_count}
+          </Link>
+        </div>
       </div>
     </article>
   );

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from "next/image";
@@ -13,6 +14,8 @@ import { Select } from "@/components/ui/select";
 import { TagInput } from "@/components/ui/tag-input";
 import { Textarea } from "@/components/ui/textarea";
 import type { Category } from "@/lib/types/app";
+
+import UnsplashSearch from "@/components/UnsplashSearch";
 
 type ShotFormAction = (
   state: ShotFormState,
@@ -34,6 +37,24 @@ type ShotFormProps = {
   cancelHref?: string;
 };
 
+type SelectedPhoto = {
+  id: string;
+  urls: {
+    small: string;
+    regular: string;
+  };
+  alt_description: string | null;
+  user: {
+    name: string;
+    links: {
+      html: string;
+    };
+  };
+  links: {
+    download_location: string;
+  };
+};
+
 export function ShotForm({
   action,
   categories,
@@ -43,8 +64,13 @@ export function ShotForm({
   coverRequired = false,
   cancelHref = "/dashboard",
 }: ShotFormProps) {
-  const [state, formAction, pending] = useActionState(action, {} satisfies ShotFormState);
+  const [state, formAction, pending] = useActionState(
+    action,
+    {} satisfies ShotFormState
+  );
+
   const [preview, setPreview] = useState<string | null>(null);
+  const [unsplashUrl, setUnsplashUrl] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -53,6 +79,30 @@ export function ShotForm({
       }
     };
   }, [preview]);
+
+  function handleUnsplashSelect(photo: SelectedPhoto) {
+    setUnsplashUrl(photo.urls.regular);
+    setPreview(null);
+
+    const fileInput = document.getElementById(
+      "cover"
+    ) as HTMLInputElement | null;
+
+    if (fileInput) {
+      fileInput.value = "";
+    }
+  }
+
+  function handleFileChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    setUnsplashUrl(null);
+    setPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  const coverPreview = preview ?? unsplashUrl ?? existingCoverUrl;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -94,6 +144,7 @@ export function ShotForm({
               <option value="" disabled>
                 Choose a category
               </option>
+
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
@@ -110,20 +161,31 @@ export function ShotForm({
         <div>
           <h2 className="text-sm font-medium">Cover image</h2>
           <p className="mt-1 text-xs text-muted">
-            JPEG, PNG, or WebP. Up to 5 MB. This is the image people see in the feed.
+            Upload JPEG, PNG, or WebP up to 5 MB, or choose an image from Unsplash.
           </p>
         </div>
 
         <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-dashed border-border bg-surface">
-          {preview || existingCoverUrl ? (
-            <Image
-              src={(preview ?? existingCoverUrl) as string}
-              alt="Cover preview"
-              fill
-              sizes="(max-width: 768px) 100vw, 640px"
-              className="object-cover"
-              unoptimized={Boolean(preview)}
-            />
+          {coverPreview ? (
+            coverPreview.startsWith("blob:") ||
+            coverPreview.startsWith("https://") ? (
+              <Image
+                src={coverPreview}
+                alt="Cover preview"
+                fill
+                sizes="(max-width: 768px) 100vw, 640px"
+                className="object-cover"
+                unoptimized
+              />
+            ) : (
+              <Image
+                src={coverPreview}
+                alt="Cover preview"
+                fill
+                sizes="(max-width: 768px) 100vw, 640px"
+                className="object-cover"
+              />
+            )
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted">
               No image selected
@@ -132,32 +194,54 @@ export function ShotForm({
         </div>
 
         <input
-          id="cover"
-          name="cover"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          required={coverRequired}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            setPreview(file ? URL.createObjectURL(file) : null);
-          }}
-          className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-brand/10"
+          type="hidden"
+          name="unsplash_url"
+          value={unsplashUrl ?? ""}
         />
-        {!coverRequired ? (
-          <p className="text-xs text-muted">Leave empty to keep the current cover.</p>
-        ) : null}
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Upload from your device</p>
+
+          <input
+            id="cover"
+            name="cover"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            required={coverRequired && !unsplashUrl && !existingCoverUrl}
+            onChange={handleFileChange}
+            className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-brand/10"
+          />
+        </div>
+
+        <div className="border-t border-border pt-4">
+          <p className="mb-3 text-sm font-medium">
+            Or choose from Unsplash
+          </p>
+
+          <UnsplashSearch
+            onSelect={handleUnsplashSelect}
+            selectedUrl={unsplashUrl}
+          />
+        </div>
+
+        {!coverRequired && (
+          <p className="text-xs text-muted">
+            Leave empty to keep the current cover.
+          </p>
+        )}
       </Card>
 
-      {state.error ? (
+      {state.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
-      ) : null}
+      )}
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : submitLabel}
         </Button>
+
         <Link href={cancelHref} className={buttonClasses("ghost")}>
           Cancel
         </Link>

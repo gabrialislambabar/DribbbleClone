@@ -2,12 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { FollowButton } from "@/components/profile/follow-button";
 import { ShotGrid } from "@/components/shots/shot-grid";
 import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getUser } from "@/lib/auth";
 import { getProfileByUsername } from "@/lib/data/profiles";
 import { getPublishedShotsByCreator } from "@/lib/data/shots";
+import { getFollowState } from "@/lib/data/social";
 import { avatarUrl } from "@/lib/storage";
 import { formatDate } from "@/lib/utils";
 
@@ -34,7 +37,14 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     notFound();
   }
 
-  const shots = await getPublishedShotsByCreator(profile.id);
+  const [shots, user] = await Promise.all([
+    getPublishedShotsByCreator(profile.id),
+    getUser(),
+  ]);
+
+  const isOwnProfile = user?.id === profile.id;
+  const following =
+    user && !isOwnProfile ? await getFollowState(user.id, profile.id) : false;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-10">
@@ -47,10 +57,27 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           />
 
           <div className="min-w-0 flex-1">
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {profile.display_name}
-            </h1>
-            <p className="mt-1 text-sm text-muted">@{profile.username}</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight">
+                  {profile.display_name}
+                </h1>
+                <p className="mt-1 text-sm text-muted">@{profile.username}</p>
+              </div>
+
+              {isOwnProfile ? (
+                <Link href="/settings" className={buttonClasses("secondary", "sm")}>
+                  Edit profile
+                </Link>
+              ) : (
+                <FollowButton
+                  profileId={profile.id}
+                  following={following}
+                  signedIn={Boolean(user)}
+                  signInHref={`/sign-in?next=/u/${profile.username}`}
+                />
+              )}
+            </div>
 
             {profile.bio ? (
               <p className="mt-4 max-w-2xl text-sm leading-6 whitespace-pre-line text-foreground/90">
@@ -59,6 +86,25 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             ) : null}
 
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+              <Link
+                href={`/u/${profile.username}/followers`}
+                className="hover:text-brand"
+              >
+                <span className="font-semibold text-foreground">
+                  {profile.follower_count}
+                </span>{" "}
+                <span className="text-muted">followers</span>
+              </Link>
+              <Link
+                href={`/u/${profile.username}/following`}
+                className="hover:text-brand"
+              >
+                <span className="font-semibold text-foreground">
+                  {profile.following_count}
+                </span>{" "}
+                <span className="text-muted">following</span>
+              </Link>
+
               {profile.portfolio_url ? (
                 <a
                   href={profile.portfolio_url}
