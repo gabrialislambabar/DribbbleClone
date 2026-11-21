@@ -245,6 +245,62 @@ export type Database = {
           },
         ];
       };
+      saved_designs: {
+        Row: {
+          user_id: string;
+          source: "pexels" | "unsplash" | "openverse" | "pixabay";
+          source_item_id: string;
+          title: string;
+          category: string;
+          image_url: string;
+          thumbnail_url: string | null;
+          source_url: string;
+          creator_name: string | null;
+          creator_url: string | null;
+          license_name: string | null;
+          license_url: string | null;
+          saved_at: string;
+        };
+        Insert: {
+          user_id: string;
+          source: "pexels" | "unsplash" | "openverse" | "pixabay";
+          source_item_id: string;
+          title: string;
+          category: string;
+          image_url: string;
+          thumbnail_url?: string | null;
+          source_url: string;
+          creator_name?: string | null;
+          creator_url?: string | null;
+          license_name?: string | null;
+          license_url?: string | null;
+          saved_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          source?: "pexels" | "unsplash" | "openverse" | "pixabay";
+          source_item_id?: string;
+          title?: string;
+          category?: string;
+          image_url?: string;
+          thumbnail_url?: string | null;
+          source_url?: string;
+          creator_name?: string | null;
+          creator_url?: string | null;
+          license_name?: string | null;
+          license_url?: string | null;
+          saved_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "saved_designs_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       shot_likes: {
         Row: {
           user_id: string;

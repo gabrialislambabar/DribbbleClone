@@ -48,6 +48,16 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 SUPABASE_PROJECT_ID=<project-ref>
 ```
 
+Image gallery variables (all server-only; never use a `NEXT_PUBLIC_` prefix):
+
+```
+PEXELS_API_KEY=<pexels key>          # https://www.pexels.com/api/
+OPENVERSE_API_TOKEN=<optional token> # optional; raises Openverse rate limits
+PIXABAY_API_KEY=<pixabay key>        # https://pixabay.com/api/docs/
+```
+
+Unsplash reuses `UNSPLASH_ACCESS_KEY`. Every gallery source except Openverse is optional: unconfigured providers are skipped and listed on the page. Check readiness with `GET /api/health/gallery`.
+
 Optional Sentry and test variables (see `.env.local.example`): `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_ADMIN_EMAIL`, `PLAYWRIGHT_ADMIN_PASSWORD`, `PLAYWRIGHT_REALTIME`.
 
 ### 4. Run the migrations
@@ -65,10 +75,12 @@ Open the Supabase SQL editor and run, in order:
 9. `supabase/migrations/0009_reports.sql`
 10. `supabase/migrations/0010_notifications.sql`
 11. `supabase/migrations/0011_realtime_authorization.sql`
+12. `supabase/migrations/0012_service_role_grants.sql`
+13. `supabase/migrations/0013_saved_designs.sql`
 
 Or link the CLI and push: `npx supabase link --project-ref <ref>` then `npx supabase db push`.
 
-Migrations 0004–0011 add likes, comments, follows, counters, full-text search vectors, feed/search RPCs, external cover credits, rate limits, reports/moderation, notifications, and realtime authorization. Runner notes:
+Migrations 0004–0013 add likes, comments, follows, counters, full-text search vectors, feed/search RPCs, external cover credits, rate limits, reports/moderation, notifications, realtime authorization, and saved gallery designs. `0013` stores only bookmark metadata for the design discovery gallery (`/gallery`); a user can only read or change their own rows. Runner notes:
 
 - 0004–0006 are safe to re-run (they use `if not exists` / `create or replace`).
 - The counter backfill only touches rows whose counts differ, so re-running does not churn `updated_at`.

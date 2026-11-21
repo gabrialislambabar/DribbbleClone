@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 
 import {
   BagIcon,
+  CameraIcon,
   BlogIcon,
   BookOpenIcon,
   BriefcaseIcon,
@@ -82,6 +83,12 @@ export const NAV_MENUS: NavGroup[] = [
     sections: [
       {
         items: [
+          {
+            label: "Design discovery",
+            href: "/gallery",
+            description: "Photography and illustration by category",
+            icon: CameraIcon,
+          },
           { label: "Popular", href: "/explore?sort=popular", icon: TrendUpIcon },
           {
             label: "New and Noteworthy",

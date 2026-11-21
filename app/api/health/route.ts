@@ -9,6 +9,12 @@ export async function GET() {
   const checks = {
     supabase: "unconfigured",
     unsplash: process.env.UNSPLASH_ACCESS_KEY ? "configured" : "unconfigured",
+    gallery: [
+      process.env.PEXELS_API_KEY ? "pexels" : null,
+      process.env.UNSPLASH_ACCESS_KEY ? "unsplash" : null,
+      process.env.PIXABAY_API_KEY ? "pixabay" : null,
+      "openverse",
+    ].filter(Boolean),
     sentry: process.env.SENTRY_DSN ? "configured" : "unconfigured",
   };
 

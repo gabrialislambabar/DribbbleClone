@@ -18,6 +18,7 @@ export const RATE_LIMITS = {
   commentDelete: { limit: 30, windowSeconds: 60 },
   follow: { limit: 30, windowSeconds: 60 },
   report: { limit: 10, windowSeconds: 3600 },
+  saveDesign: { limit: 120, windowSeconds: 3600 },
 } as const;
 
 export type RateLimitAction = keyof typeof RATE_LIMITS;

@@ -13,6 +13,7 @@ import {
   type FeedSort,
 } from "@/lib/feed/params";
 import { createPublicClient } from "@/lib/supabase/public";
+import { withNetworkRetry } from "@/lib/data/resilient";
 import { logError } from "@/lib/observability/logger";
 import type { ShotListItem } from "@/lib/types/app";
 import type { ShotFeedRow } from "@/lib/types/database";
@@ -58,25 +59,29 @@ const getCachedFeed = unstable_cache(
     cursorTime: string | null,
     cursorId: string | null,
   ): Promise<FeedPage> => {
-    const supabase = createPublicClient();
-    const { data, error } = await supabase.rpc("get_shots_feed", {
-      p_sort: sort,
-      p_category_id: categoryId,
-      p_tag: tag,
-      p_creator: creator,
-      p_days: days,
-      p_cursor_score: cursorScore,
-      p_cursor_time: cursorTime,
-      p_cursor_id: cursorId,
-      p_limit: FEED_PAGE_SIZE + 1,
-    });
+    const rows = await withNetworkRetry(async () => {
+      const supabase = createPublicClient();
+      const { data, error } = await supabase.rpc("get_shots_feed", {
+        p_sort: sort,
+        p_category_id: categoryId,
+        p_tag: tag,
+        p_creator: creator,
+        p_days: days,
+        p_cursor_score: cursorScore,
+        p_cursor_time: cursorTime,
+        p_cursor_id: cursorId,
+        p_limit: FEED_PAGE_SIZE + 1,
+      });
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as ShotFeedRow[];
+    }).catch((error) => {
       logError("data.feed", error);
       throw new Error("We couldn't load this content right now.");
-    }
-
-    const rows = (data ?? []) as ShotFeedRow[];
+    });
     const hasMore = rows.length > FEED_PAGE_SIZE;
     const pageRows = rows.slice(0, FEED_PAGE_SIZE);
     const last = pageRows.at(-1);

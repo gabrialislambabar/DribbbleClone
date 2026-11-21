@@ -762,3 +762,38 @@ export function ArrowDownIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function CameraIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn("h-3.5 w-3.5", className)}
+    >
+      <path d="M4 8.5h3l1.5-2h7l1.5 2h3v10.5H4Z" />
+      <circle cx="12" cy="13.5" r="3" />
+    </svg>
+  );
+}
+
+export function FilterIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn("h-4 w-4", className)}
+    >
+      <path d="M4 6h16M7 12h10M10 18h4" />
+    </svg>
+  );
+}

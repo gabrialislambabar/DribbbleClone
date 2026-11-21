@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
+import { withNetworkRetry } from "@/lib/data/resilient";
 import { createPublicClient } from "@/lib/supabase/public";
 import { logError } from "@/lib/observability/logger";
 import type { ShotListItem } from "@/lib/types/app";
@@ -93,20 +94,26 @@ function mapShot(row: RawShot): ShotListItem {
 
 const getCachedExploreShots = unstable_cache(
   async (): Promise<ShotListItem[]> => {
-    const supabase = createPublicClient();
-    const { data, error } = await supabase
-      .from("shots")
-      .select(SHOT_SELECT)
-      .eq("status", "published")
-      .order("published_at", { ascending: false })
-      .limit(200);
+    const rows = await withNetworkRetry(async () => {
+      const supabase = createPublicClient();
+      const { data, error } = await supabase
+        .from("shots")
+        .select(SHOT_SELECT)
+        .eq("status", "published")
+        .order("published_at", { ascending: false })
+        .limit(200);
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      return (data ?? []) as unknown as RawShot[];
+    }).catch((error) => {
       logError("data.explore", error);
       throw new Error("We couldn't load projects right now.");
-    }
+    });
 
-    return ((data ?? []) as unknown as RawShot[]).map(mapShot);
+    return rows.map(mapShot);
   },
   ["explore-shots"],
   { tags: ["shots:feed"], revalidate: 60 },
