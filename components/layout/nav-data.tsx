@@ -132,8 +132,8 @@ export const NAV_MENUS: NavGroup[] = [
           },
           {
             label: "Managed Creative Services",
-            description: "by our studio partners",
-            href: "/services",
+            description: "We run the work, you pick the designers",
+            href: "/managed-creative-services",
             icon: BuildingIcon,
           },
         ],
