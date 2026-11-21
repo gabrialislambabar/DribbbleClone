@@ -1,4 +1,3 @@
-
 "use client";
 
 import Image from "next/image";
@@ -51,7 +50,8 @@ type SelectedPhoto = {
     };
   };
   links: {
-    download_location: string;
+    html: string | null;
+    download_location: string | null;
   };
 };
 
@@ -64,13 +64,10 @@ export function ShotForm({
   coverRequired = false,
   cancelHref = "/dashboard",
 }: ShotFormProps) {
-  const [state, formAction, pending] = useActionState(
-    action,
-    {} satisfies ShotFormState
-  );
+  const [state, formAction, pending] = useActionState(action, {} satisfies ShotFormState);
 
   const [preview, setPreview] = useState<string | null>(null);
-  const [unsplashUrl, setUnsplashUrl] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<SelectedPhoto | null>(null);
 
   useEffect(() => {
     return () => {
@@ -81,28 +78,24 @@ export function ShotForm({
   }, [preview]);
 
   function handleUnsplashSelect(photo: SelectedPhoto) {
-    setUnsplashUrl(photo.urls.regular);
+    setSelectedPhoto(photo);
     setPreview(null);
 
-    const fileInput = document.getElementById(
-      "cover"
-    ) as HTMLInputElement | null;
+    const fileInput = document.getElementById("cover") as HTMLInputElement | null;
 
     if (fileInput) {
       fileInput.value = "";
     }
   }
 
-  function handleFileChange(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
-    setUnsplashUrl(null);
+    setSelectedPhoto(null);
     setPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  const coverPreview = preview ?? unsplashUrl ?? existingCoverUrl;
+  const coverPreview = preview ?? selectedPhoto?.urls.regular ?? existingCoverUrl;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -167,8 +160,7 @@ export function ShotForm({
 
         <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-dashed border-border bg-surface">
           {coverPreview ? (
-            coverPreview.startsWith("blob:") ||
-            coverPreview.startsWith("https://") ? (
+            coverPreview.startsWith("blob:") || coverPreview.startsWith("https://") ? (
               <Image
                 src={coverPreview}
                 alt="Cover preview"
@@ -196,7 +188,29 @@ export function ShotForm({
         <input
           type="hidden"
           name="unsplash_url"
-          value={unsplashUrl ?? ""}
+          value={selectedPhoto?.urls.regular ?? ""}
+        />
+        <input
+          type="hidden"
+          name="unsplash_credit_name"
+          value={selectedPhoto?.user.name ?? ""}
+        />
+        <input
+          type="hidden"
+          name="unsplash_credit_url"
+          value={selectedPhoto?.user.links.html ?? ""}
+        />
+        <input
+          type="hidden"
+          name="unsplash_photo_url"
+          value={selectedPhoto?.links.html ?? ""}
+        />
+        <input type="hidden" name="unsplash_source_id" value={selectedPhoto?.id ?? ""} />
+        <input type="hidden" name="unsplash_provider" value="unsplash" />
+        <input
+          type="hidden"
+          name="unsplash_download_location"
+          value={selectedPhoto?.links.download_location ?? ""}
         />
 
         <div className="space-y-2">
@@ -207,27 +221,38 @@ export function ShotForm({
             name="cover"
             type="file"
             accept="image/jpeg,image/png,image/webp"
-            required={coverRequired && !unsplashUrl && !existingCoverUrl}
+            required={coverRequired && !selectedPhoto && !existingCoverUrl}
             onChange={handleFileChange}
             className="block w-full text-sm text-muted file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-brand/10"
           />
         </div>
 
         <div className="border-t border-border pt-4">
-          <p className="mb-3 text-sm font-medium">
-            Or choose from Unsplash
-          </p>
+          <p className="mb-3 text-sm font-medium">Or choose from Unsplash</p>
 
           <UnsplashSearch
             onSelect={handleUnsplashSelect}
-            selectedUrl={unsplashUrl}
+            selectedUrl={selectedPhoto?.urls.regular ?? null}
           />
+
+          {selectedPhoto ? (
+            <p className="mt-3 text-xs text-muted">
+              Selected photo by{" "}
+              <a
+                href={selectedPhoto.user.links.html}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-foreground"
+              >
+                {selectedPhoto.user.name}
+              </a>{" "}
+              on Unsplash
+            </p>
+          ) : null}
         </div>
 
         {!coverRequired && (
-          <p className="text-xs text-muted">
-            Leave empty to keep the current cover.
-          </p>
+          <p className="text-xs text-muted">Leave empty to keep the current cover.</p>
         )}
       </Card>
 

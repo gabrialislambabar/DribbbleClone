@@ -8,20 +8,23 @@ import {
   editComment,
   type CommentActionState,
 } from "@/app/social/actions";
+import { ReportButton } from "@/components/moderation/report-button";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { COMMENT_BODY_MAX } from "@/lib/comments/constants";
 import { avatarUrl } from "@/lib/storage";
 import type { CommentItem } from "@/lib/types/app";
 import { formatDate } from "@/lib/utils";
 
 type CommentItemProps = {
   comment: CommentItem;
+  signedIn: boolean;
   canEdit: boolean;
   canDelete: boolean;
 };
 
-export function CommentItem({ comment, canEdit, canDelete }: CommentItemProps) {
+export function CommentItem({ comment, signedIn, canEdit, canDelete }: CommentItemProps) {
   const [editing, setEditing] = useState(false);
   const [state, formAction, pending] = useActionState(
     async (previousState: CommentActionState, formData: FormData) => {
@@ -70,7 +73,7 @@ export function CommentItem({ comment, canEdit, canDelete }: CommentItemProps) {
             <Textarea
               name="body"
               rows={3}
-              maxLength={1000}
+              maxLength={COMMENT_BODY_MAX}
               defaultValue={comment.body}
               required
             />
@@ -95,7 +98,7 @@ export function CommentItem({ comment, canEdit, canDelete }: CommentItemProps) {
           </p>
         )}
 
-        {!editing && (canEdit || canDelete) ? (
+        {!editing && (canEdit || canDelete || signedIn) ? (
           <div className="mt-1 flex items-center gap-3 text-xs">
             {canEdit ? (
               <button
@@ -109,7 +112,9 @@ export function CommentItem({ comment, canEdit, canDelete }: CommentItemProps) {
 
             {canDelete ? (
               <form
-                action={deleteComment.bind(null, comment.id)}
+                action={async () => {
+                  await deleteComment(comment.id);
+                }}
                 onSubmit={(event) => {
                   if (!window.confirm("Delete this comment?")) {
                     event.preventDefault();
@@ -120,6 +125,14 @@ export function CommentItem({ comment, canEdit, canDelete }: CommentItemProps) {
                   Delete
                 </button>
               </form>
+            ) : null}
+
+            {!canEdit ? (
+              <ReportButton
+                targetType="comment"
+                commentId={comment.id}
+                signedIn={signedIn}
+              />
             ) : null}
           </div>
         ) : null}

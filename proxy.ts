@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { RATE_LIMITS } from "@/lib/rate-limit/config";
+import { consumeMemoryRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit/memory";
 import { updateSession } from "@/lib/supabase/middleware";
 
 const PROTECTED_ROUTES = [
@@ -8,11 +10,45 @@ const PROTECTED_ROUTES = [
   /^\/dashboard(?:\/|$)/,
   /^\/shots\/new$/,
   /^\/shots\/[^/]+\/edit$/,
+  /^\/notifications(?:\/|$)/,
+  /^\/moderation(?:\/|$)/,
 ];
 
 const AUTH_ROUTES = new Set(["/sign-in", "/sign-up"]);
 
+function throttlePublicSearch(request: NextRequest) {
+  if (request.method !== "GET" || request.nextUrl.pathname !== "/search") {
+    return null;
+  }
+
+  const config = RATE_LIMITS.publicSearch;
+  const ip = getClientIpFromHeaders(request.headers);
+  const result = consumeMemoryRateLimit(
+    `publicSearch:${ip}`,
+    config.limit,
+    config.windowSeconds,
+  );
+
+  if (result.allowed) {
+    return null;
+  }
+
+  return new NextResponse("Too many searches. Please try again in a moment.", {
+    status: 429,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "retry-after": String(result.retryAfterSeconds),
+      "cache-control": "no-store",
+    },
+  });
+}
+
 export async function proxy(request: NextRequest) {
+  const throttled = throttlePublicSearch(request);
+  if (throttled) {
+    return throttled;
+  }
+
   const { response, user } = await updateSession(request);
   const { pathname, search } = request.nextUrl;
 

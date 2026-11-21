@@ -613,3 +613,5 @@ revoke all on function public.get_following(
 grant execute on function public.get_following(
   uuid, timestamptz, uuid, integer
 ) to anon, authenticated;
+
+notify pgrst, 'reload schema';

@@ -59,6 +59,7 @@ export type Database = {
           avatar_path: string | null;
           follower_count: number;
           following_count: number;
+          is_admin: boolean;
           search_vector: unknown;
           created_at: string;
           updated_at: string;
@@ -72,6 +73,7 @@ export type Database = {
           avatar_path?: string | null;
           follower_count?: number;
           following_count?: number;
+          is_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -84,6 +86,7 @@ export type Database = {
           avatar_path?: string | null;
           follower_count?: number;
           following_count?: number;
+          is_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -141,6 +144,11 @@ export type Database = {
           title: string;
           description: string | null;
           cover_image_path: string;
+          cover_credit_name: string | null;
+          cover_credit_url: string | null;
+          cover_photo_url: string | null;
+          cover_source_id: string | null;
+          cover_provider: string | null;
           status: ShotStatus;
           like_count: number;
           comment_count: number;
@@ -157,6 +165,11 @@ export type Database = {
           title: string;
           description?: string | null;
           cover_image_path: string;
+          cover_credit_name?: string | null;
+          cover_credit_url?: string | null;
+          cover_photo_url?: string | null;
+          cover_source_id?: string | null;
+          cover_provider?: string | null;
           status?: ShotStatus;
           like_count?: number;
           comment_count?: number;
@@ -172,6 +185,11 @@ export type Database = {
           title?: string;
           description?: string | null;
           cover_image_path?: string;
+          cover_credit_name?: string | null;
+          cover_credit_url?: string | null;
+          cover_photo_url?: string | null;
+          cover_source_id?: string | null;
+          cover_provider?: string | null;
           status?: ShotStatus;
           like_count?: number;
           comment_count?: number;
@@ -335,6 +353,184 @@ export type Database = {
           },
         ];
       };
+      reports: {
+        Row: {
+          id: string;
+          reporter_id: string | null;
+          target_type: string;
+          shot_id: string | null;
+          comment_id: string | null;
+          profile_id: string | null;
+          reason: string;
+          details: string | null;
+          status: string;
+          resolved_by: string | null;
+          resolved_at: string | null;
+          resolution_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reporter_id?: string | null;
+          target_type: string;
+          shot_id?: string | null;
+          comment_id?: string | null;
+          profile_id?: string | null;
+          reason: string;
+          details?: string | null;
+          status?: string;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          resolution_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reporter_id?: string | null;
+          target_type?: string;
+          shot_id?: string | null;
+          comment_id?: string | null;
+          profile_id?: string | null;
+          reason?: string;
+          details?: string | null;
+          status?: string;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          resolution_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey";
+            columns: ["reporter_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_shot_id_fkey";
+            columns: ["shot_id"];
+            isOneToOne: false;
+            referencedRelation: "shots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "reports_resolved_by_fkey";
+            columns: ["resolved_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notifications: {
+        Row: {
+          id: string;
+          recipient_id: string;
+          actor_id: string | null;
+          type: string;
+          shot_id: string | null;
+          comment_id: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          recipient_id: string;
+          actor_id?: string | null;
+          type: string;
+          shot_id?: string | null;
+          comment_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          recipient_id?: string;
+          actor_id?: string | null;
+          type?: string;
+          shot_id?: string | null;
+          comment_id?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_recipient_id_fkey";
+            columns: ["recipient_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_shot_id_fkey";
+            columns: ["shot_id"];
+            isOneToOne: false;
+            referencedRelation: "shots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_comment_id_fkey";
+            columns: ["comment_id"];
+            isOneToOne: false;
+            referencedRelation: "comments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      notification_preferences: {
+        Row: {
+          user_id: string;
+          follows: boolean;
+          comments: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          follows?: boolean;
+          comments?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          follows?: boolean;
+          comments?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -345,6 +541,11 @@ export type Database = {
           p_category_id: string;
           p_tags: string[];
           p_cover_path: string;
+          p_cover_credit_name?: string | null;
+          p_cover_credit_url?: string | null;
+          p_cover_photo_url?: string | null;
+          p_cover_source_id?: string | null;
+          p_cover_provider?: string | null;
         };
         Returns: string;
       };
@@ -356,6 +557,11 @@ export type Database = {
           p_category_id: string;
           p_tags: string[];
           p_cover_path: string;
+          p_cover_credit_name?: string | null;
+          p_cover_credit_url?: string | null;
+          p_cover_photo_url?: string | null;
+          p_cover_source_id?: string | null;
+          p_cover_provider?: string | null;
         };
         Returns: undefined;
       };
@@ -431,6 +637,24 @@ export type Database = {
           p_shot_id: string;
         };
         Returns: Json;
+      };
+      consume_rate_limit: {
+        Args: {
+          p_action: string;
+          p_limit?: number;
+          p_window_seconds?: number;
+        };
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          reset_at: string;
+        }[];
+      };
+      is_admin: {
+        Args: {
+          p_uid?: string | null;
+        };
+        Returns: boolean;
       };
     };
     Enums: { [_ in never]: never };

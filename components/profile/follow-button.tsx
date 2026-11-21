@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic } from "react";
+import { useOptimistic, useState } from "react";
 
 import { followProfile, unfollowProfile } from "@/app/social/actions";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -21,6 +21,7 @@ export function FollowButton({
   signInHref,
   size = "sm",
 }: FollowButtonProps) {
+  const [error, setError] = useState<string | null>(null);
   const [isFollowing, setFollowing] = useOptimistic<boolean, boolean>(
     following,
     (_current, next) => next,
@@ -35,16 +36,31 @@ export function FollowButton({
   }
 
   return (
-    <form
-      action={async () => {
-        const next = !isFollowing;
-        setFollowing(next);
-        await (next ? followProfile(profileId) : unfollowProfile(profileId));
-      }}
-    >
-      <Button type="submit" size={size} variant={isFollowing ? "secondary" : "primary"}>
-        {isFollowing ? "Following" : "Follow"}
-      </Button>
-    </form>
+    <div className="space-y-1">
+      <form
+        action={async () => {
+          setError(null);
+          const next = !isFollowing;
+          setFollowing(next);
+
+          const result = next
+            ? await followProfile(profileId)
+            : await unfollowProfile(profileId);
+
+          if (!result.ok) {
+            setError(result.error);
+          }
+        }}
+      >
+        <Button type="submit" size={size} variant={isFollowing ? "secondary" : "primary"}>
+          {isFollowing ? "Following" : "Follow"}
+        </Button>
+      </form>
+      {error ? (
+        <p role="status" className="text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

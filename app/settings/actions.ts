@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
 import { AVATAR_BUCKET, SHOT_COVER_BUCKET } from "@/lib/env";
+import { toSafeMessage } from "@/lib/errors";
+import { userRateLimitError } from "@/lib/rate-limit/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { AVATAR_MAX_BYTES, avatarStoragePath, validateImageFile } from "@/lib/storage";
@@ -29,6 +31,11 @@ export async function updateProfile(
   formData: FormData,
 ): Promise<ProfileState> {
   const user = await requireUser();
+
+  const limited = await userRateLimitError("profileUpdate");
+  if (limited) {
+    return { error: limited };
+  }
 
   const parsed = profileSchema.safeParse({
     display_name: formString(formData, "display_name"),
@@ -67,7 +74,7 @@ export async function updateProfile(
       .upload(nextPath, avatar, { contentType: avatar.type, upsert: false });
 
     if (uploadError) {
-      return { error: uploadError.message };
+      return { error: toSafeMessage(uploadError, "We couldn't upload that image.") };
     }
 
     uploadedPath = nextPath;
@@ -88,7 +95,7 @@ export async function updateProfile(
     if (uploadedPath) {
       await supabase.storage.from(AVATAR_BUCKET).remove([uploadedPath]);
     }
-    return { error: error.message };
+    return { error: toSafeMessage(error, "We couldn't update your profile.") };
   }
 
   if (uploadedPath && profile.avatar_path) {
@@ -108,6 +115,12 @@ export async function deleteAccount(
   formData: FormData,
 ): Promise<DeleteAccountState> {
   const user = await requireUser();
+
+  const limited = await userRateLimitError("accountDelete");
+  if (limited) {
+    return { error: limited };
+  }
+
   const confirmation = formString(formData, "confirmation").trim().toLowerCase();
 
   const admin = createAdminClient();

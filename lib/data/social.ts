@@ -8,9 +8,10 @@ import {
 } from "@/lib/follows/params";
 import type { CommentItem, FollowListItem } from "@/lib/types/app";
 import type { FollowListRow } from "@/lib/types/database";
+import { logError } from "@/lib/observability/logger";
+import { COMMENT_MAX } from "@/lib/comments/constants";
 
-export const COMMENT_PAGE_SIZE = 20;
-export const COMMENT_MAX = 100;
+export { COMMENT_MAX, COMMENT_PAGE_SIZE } from "@/lib/comments/constants";
 
 export async function getLikedShotIds(
   userId: string,
@@ -70,7 +71,8 @@ export async function getComments(shotId: string, limit: number): Promise<Commen
     .limit(Math.min(Math.max(limit, 1), COMMENT_MAX));
 
   if (error) {
-    throw new Error(error.message);
+    logError("data.social", error);
+    throw new Error("We couldn't load this content right now.");
   }
 
   return ((data ?? []) as unknown as RawComment[]).map((row) => ({
@@ -141,7 +143,8 @@ export async function getFollowList(
       : await supabase.rpc("get_following", args);
 
   if (error) {
-    throw new Error(error.message);
+    logError("data.social", error);
+    throw new Error("We couldn't load this content right now.");
   }
 
   const rows = (data ?? []) as FollowListRow[];

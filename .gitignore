@@ -1,6 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
 /node_modules
 /.pnp
 .pnp.*
@@ -9,34 +11,99 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+/.pnpm-store
+/.npm
+/.cache
 
-# testing
-/coverage
-
-# next.js
+# ---------------------------------------------------------------------------
+# Build output and caches
+# ---------------------------------------------------------------------------
 /.next/
 /out/
-
-# production
 /build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+/dist
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+/.turbo/
+.eslintcache
+.prettiercache
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.pid
+*.seed
 
-# env files (can opt-in for committing if needed)
-.env*
+# ---------------------------------------------------------------------------
+# Test artifacts
+# ---------------------------------------------------------------------------
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+coverage-final.json
+junit*.xml
+*.lcov
+
+# ---------------------------------------------------------------------------
+# Environment and secret files
+# The example template is intentionally tracked; real values never are.
+# ---------------------------------------------------------------------------
+.env
+.env.*
 !.env.local.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+secrets/
+.secrets/
+credentials.json
+*credentials*.json
+*service-account*.json
+firebase-adminsdk*.json
+gcloud-*.json
+*secret*.json
+*.env.json
+*.secret
+*.secrets
+id_rsa
+id_ed25519
+*.ppk
+.ssh/
+.aws/
+.gcloud/
+.npmrc
+.pypirc
+.netrc
+.htpasswd
+supabase/.temp/
+supabase/.branches/
+supabase/.env
 
-# vercel
-.vercel
+# ---------------------------------------------------------------------------
+# Local / generated JSON
+# App config stays tracked: package.json, package-lock.json, tsconfig.json,
+# supabase/config.json, and any other committed configuration.
+# ---------------------------------------------------------------------------
+*.local.json
+*.generated.json
+*.tmp.json
+.vercel/
+.vscode/
+.idea/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ---------------------------------------------------------------------------
+# OS noise
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

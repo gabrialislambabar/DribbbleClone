@@ -26,6 +26,7 @@ export function ShotCard({ shot, likeable = false, signedIn = false }: ShotCardP
               alt={shot.title}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              unoptimized={Boolean(shot.cover_credit)}
               className="object-cover transition duration-300 group-hover:scale-[1.02]"
             />
           ) : null}
@@ -58,6 +59,21 @@ export function ShotCard({ shot, likeable = false, signedIn = false }: ShotCardP
             {shot.creator.display_name}
           </Link>
         </div>
+
+        {shot.cover_credit ? (
+          <p className="text-[11px] text-muted">
+            Photo by{" "}
+            <a
+              href={shot.cover_credit.url}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:text-foreground"
+            >
+              {shot.cover_credit.name}
+            </a>{" "}
+            on Unsplash
+          </p>
+        ) : null}
 
         {shot.tags.length > 0 ? (
           <ul className="flex flex-wrap gap-1.5">

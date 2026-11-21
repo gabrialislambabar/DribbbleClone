@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 
 import { getUser } from "@/lib/auth";
 import { getLikedShotIds } from "@/lib/data/social";
+import { getShotCoverCredits } from "@/lib/data/shots";
 import { encodeFeedCursor } from "@/lib/feed/cursor";
 import {
   FEED_PAGE_SIZE,
@@ -12,6 +13,7 @@ import {
   type FeedSort,
 } from "@/lib/feed/params";
 import { createPublicClient } from "@/lib/supabase/public";
+import { logError } from "@/lib/observability/logger";
 import type { ShotListItem } from "@/lib/types/app";
 import type { ShotFeedRow } from "@/lib/types/database";
 
@@ -27,6 +29,7 @@ function mapFeedRow(row: ShotFeedRow): ShotListItem {
     title: row.title,
     description: null,
     cover_image_path: row.cover_image_path,
+    cover_credit: null,
     status: "published",
     category_id: row.category_id,
     category_name: row.category_name,
@@ -69,16 +72,21 @@ const getCachedFeed = unstable_cache(
     });
 
     if (error) {
-      throw new Error(error.message);
+      logError("data.feed", error);
+      throw new Error("We couldn't load this content right now.");
     }
 
     const rows = (data ?? []) as ShotFeedRow[];
     const hasMore = rows.length > FEED_PAGE_SIZE;
     const pageRows = rows.slice(0, FEED_PAGE_SIZE);
     const last = pageRows.at(-1);
+    const credits = await getShotCoverCredits(pageRows.map((row) => row.id));
 
     return {
-      shots: pageRows.map(mapFeedRow),
+      shots: pageRows.map((row) => ({
+        ...mapFeedRow(row),
+        cover_credit: credits.get(row.id) ?? null,
+      })),
       hasMore,
       nextCursor:
         hasMore && last

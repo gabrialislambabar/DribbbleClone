@@ -1,0 +1,14 @@
+# Taste
+- Prefers a single-framework stack for full web apps: Next.js App Router with TypeScript plus Supabase (Postgres, Auth, Storage) handling server-side logic — explicitly no separate Express/backend server. Confidence: 0.7
+- Wants a server-first access pattern: Server Components for reads, Server Actions for mutations from their own UI, Route Handlers only for webhooks/external HTTP endpoints. Confidence: 0.65
+- Wants a full planning phase before implementation, driven by clarifying/design questions asked before each new step of work begins (not after code is written), and prefers the work proceeds step by step in the existing project. Confidence: 0.85
+- Wants each planning question to come with recommended/most-suitable options to pick from, rather than open-ended questions. Confidence: 0.6
+- When asking to fix problems, wants minimal surgical changes: keep existing code, structure, and behavior exactly as-is and only remove the error — no refactoring, renaming, or redesign mixed in. Confidence: 0.7
+- Treats SQL migration files as the official, reviewable record of schema changes (over ad-hoc dashboard edits). Confidence: 0.65
+- Wants to build on infrastructure/accounts they fully own and can administer themselves (e.g. their own Supabase project) rather than a previous owner's project where they lack dashboard/SQL access. Confidence: 0.5
+- When getting a project running, wants explicit step-by-step setup instructions that enumerate every required key/env variable rather than a high-level summary. Confidence: 0.55
+- Time-constrained: prefers skipping optional tooling (error monitoring like Sentry, E2E suites like Playwright) to focus on shipping UI/feature work, and wants setup done "as quickly as possible" over complete tooling coverage. Confidence: 0.55
+- When asking "how do I resolve X", wants to be guided/told the fix (explanation plus the exact steps to run themselves) rather than having the agent jump in and change files unasked. Confidence: 0.6
+- Prefers not to add new dependencies or frameworks for a feature: reuse the existing stack and already-installed libraries, falling back to CSS transitions and React state rather than adding a motion/animation library unnecessarily. Confidence: 0.6
+- Wants features driven by the project's real data model, not mockups: inspect existing models/routes/components first, wire UI to the actual dataset, and make controls (filters, sort, search) genuinely work — explicitly no hard-coded demo cards and no inventing values that can't be derived from real data. Confidence: 0.75
+- Wants shared behavior extracted into a single reusable module (e.g. one filtering function/hook plus focused components) instead of duplicating logic across components. Confidence: 0.65

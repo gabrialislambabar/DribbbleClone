@@ -20,7 +20,16 @@ export function storagePublicUrl(bucket: string, path: string): string {
 }
 
 export function shotCoverUrl(path: string | null | undefined): string | null {
-  return path ? storagePublicUrl(SHOT_COVER_BUCKET, path) : null;
+  if (!path) {
+    return null;
+  }
+
+  // External covers (allow-listed Unsplash URLs) are stored verbatim.
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return storagePublicUrl(SHOT_COVER_BUCKET, path);
 }
 
 export function avatarUrl(path: string | null | undefined): string | null {
