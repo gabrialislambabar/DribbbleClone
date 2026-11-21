@@ -5,7 +5,7 @@ import { FacebookIcon, InstagramIcon, PinterestIcon, XIcon } from "@/components/
 const PRIMARY_LINKS = [
   { href: "/search?tab=designers", label: "For designers" },
   { href: "/search?tab=designers", label: "Hire talent" },
-  { href: "/", label: "Inspiration" },
+  { href: "/explore", label: "Inspiration" },
   { href: "#", label: "Advertising" },
   { href: "#", label: "Blog" },
   { href: "#", label: "About" },
@@ -26,10 +26,22 @@ const SECONDARY_LINKS = [
 ];
 
 const SOCIAL_LINKS = [
-  { href: "#", label: "X", Icon: XIcon },
-  { href: "#", label: "Facebook", Icon: FacebookIcon },
-  { href: "#", label: "Instagram", Icon: InstagramIcon },
-  { href: "#", label: "Pinterest", Icon: PinterestIcon },
+  {
+    href: "https://www.facebook.com/your-page",
+    label: "Facebook",
+    Icon: FacebookIcon,
+  },
+  {
+    href: "https://www.instagram.com/your-page",
+    label: "Instagram",
+    Icon: InstagramIcon,
+  },
+  {
+    href: "https://www.pinterest.com/your-page",
+    label: "Pinterest",
+    Icon: PinterestIcon,
+  },
+  { href: "https://x.com/your-page", label: "X", Icon: XIcon },
 ];
 
 const linkClasses =
@@ -63,6 +75,8 @@ export function SiteFooter() {
                 key={label}
                 href={href}
                 aria-label={label}
+                target="_blank"
+                rel="noreferrer"
                 className={`inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted transition-colors hover:border-foreground/20 hover:text-foreground ${linkClasses}`}
               >
                 <Icon />
